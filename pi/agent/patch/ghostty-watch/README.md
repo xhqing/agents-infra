@@ -41,7 +41,8 @@ tmux 解决的是「工作不丢」；本工具解决的是「**是否被杀过�
 
 - 走 `lark-cli --profile nancy im +messages-send --as bot`，对你的 open_id 发单聊；机器人身份用应用凭证，不受 user token 过期影响。
 - **发送方固定是 Nancy（Kit 的助手），不是 Linda**（2026-11-15 用户立：Linda 是 Victor 的专属 assistant，这个通知与本机工具链无关，不该蹭 Victor 的机器人）。
-- open_id 是**应用维度**的——同一个人在不同应用下 open_id 不同。Nancy 应用下的 open_id 与本机默认 profile（Linda）不同，代码里写成常量 `LARK_OPEN_ID`，首次发送时回写进 `~/.local/state/ghostty-watch/config.json`（本机文件，不进仓库）。换应用时必须同时换 open_id，否则飞书报 `99992361`（脚本会把这个错误单独提示出来）。
+- open_id 是**应用维度**的个人标识——同一个人在不同应用下 open_id 不同。代码里不写它（本目录会镜像到公开仓库），只写在**本机** `~/.local/state/ghostty-watch/config.json` 的 `feishu_profile` / `feishu_open_id` 两个字段里；换应用必须成对改，否则飞书报 `99992361`（脚本会把这条单独提示出来）。
+- 首次部署时若 config 缺 open_id，先给 Nancy 这个 profile 做一次用户授权（`lark-cli auth login --profile nancy`），脚本会自己从 `auth status` 读；也可以直接把 open_id 填进 config.json。
 - 前提：本机 `lark-cli` 里有名为 `nancy` 的 profile（`lark-cli profile list` 可查）。缺了就加：`lark-cli profile add --name nancy --app-id <Nancy 的 App ID> --app-secret-stdin`。
 - 飞书域名必须直连：脚本内已强制 `NO_PROXY=feishu.cn,.feishu.cn,larksuite.com,...`。
 - 临时关掉飞书（只留桌面通知）：在 config.json 里加 `"feishu_disabled": true`。

@@ -325,17 +325,19 @@ FEISHU_NO_PROXY = "feishu.cn,.feishu.cn,larksuite.com,.larksuite.com,127.0.0.1,l
 CONFIG_FILE = STATE_DIR / "config.json"
 
 # 发送方是谁（2026-11-15 用户立）：用 Nancy（Kit 的助手），**不要用 Linda**（Linda 是
-# Victor 的专属助手、描述写着 Victor's Assistant）。飞书 open_id 是**应用维度**的——同一个人
-# 在不同应用下 open_id 不同，换应用必须同时换 open_id，否则报 99992361。
+# Victor 的专属助手、描述写着 Victor's Assistant）。
+#
+# 为什么只写 profile 名、不写 open_id（2026-11-15）：飞书 open_id 是**应用维度**的个人标识，
+# 本目录会随全局能力层镜像到公开仓库，不该把个人标识写进代码。所以落在本机
+# `~/.local/state/ghostty-watch/config.json`（不进仓库，字段 feishu_profile / feishu_open_id）。
+# 换应用必须同时换 open_id（只换 profile 不换 open_id，飞书会报 99992361）。
 LARK_PROFILE = "nancy"
-LARK_OPEN_ID = "ou_f0026b075b16043135a779216f0572b9"
 
 
 def _notify_feishu(title: str, body: str) -> tuple[bool, str]:
     """飞书推送（主渠道）：手机、桌面都能收到。走 lark-cli 的 bot 身份，不受 user token 过期影响。
 
-    固定用 profile `nancy` + 该应用下的 open_id。配置里可覆盖（feishu_profile /
-    feishu_open_id），但两者必须成对给出——只换 profile 不换 open_id 会静默发不出去。
+    profile 默认 `nancy`，open_id 取本机配置；两者都可在 config.json 里覆盖（成对改）。
     """
     if not os.path.exists(LARK_CLI):
         return False, "未安装 lark-cli"
@@ -343,18 +345,16 @@ def _notify_feishu(title: str, body: str) -> tuple[bool, str]:
     if cfg.get("feishu_disabled"):
         return False, "飞书通知已在配置里关闭"
     profile = cfg.get("feishu_profile") or LARK_PROFILE
-    if profile == LARK_PROFILE and not cfg.get("feishu_profile"):
-        # 旧版本把 Linda 应用下的 open_id 缓存在配置里；那是应用维度的值，拿到 Nancy
-        # 应用上会报 99992361。所以未显式指定 profile 时一律用常量（并覆盖旧缓存）。
-        uid = LARK_OPEN_ID
-    else:
-        uid = cfg.get("feishu_open_id") or ""
-        if not uid:
-            out = run([LARK_CLI, "auth", "status", "--profile", profile], timeout=40)
-            m = re.search(r'"openId"\s*:\s*"([^"]+)"', out)
-            if not m:
-                return False, f"飞书发送配置缺失：profile {profile} 没有可用的 open_id"
+    uid = cfg.get("feishu_open_id") or ""
+    if not uid:
+        out = run([LARK_CLI, "auth", "status", "--profile", profile], timeout=40)
+        m = re.search(r'"openId"\s*:\s*"([^"]+)"', out)
+        if m:
             uid = m.group(1)
+        else:
+            return False, (f"飞书发送配置缺失：profile {profile} 没有用户 open_id（在"
+                           f" {CONFIG_FILE} 里填 feishu_open_id，或给该 profile 做一次 "
+                           f"`lark-cli auth login --profile {profile}`）")
     if cfg.get("feishu_open_id") != uid or cfg.get("feishu_profile") != profile:
         cfg["feishu_profile"] = profile
         cfg["feishu_open_id"] = uid
