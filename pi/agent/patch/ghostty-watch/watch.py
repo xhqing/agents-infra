@@ -324,21 +324,39 @@ LARK_CLI = str(Path.home() / ".local/bin/lark-cli")
 FEISHU_NO_PROXY = "feishu.cn,.feishu.cn,larksuite.com,.larksuite.com,127.0.0.1,localhost"
 CONFIG_FILE = STATE_DIR / "config.json"
 
+# 发送方是谁（2026-11-15 用户立）：用 Nancy（Kit 的助手），**不要用 Linda**（Linda 是
+# Victor 的专属助手、描述写着 Victor's Assistant）。飞书 open_id 是**应用维度**的——同一个人
+# 在不同应用下 open_id 不同，换应用必须同时换 open_id，否则报 99992361。
+LARK_PROFILE = "nancy"
+LARK_OPEN_ID = "ou_f0026b075b16043135a779216f0572b9"
+
 
 def _notify_feishu(title: str, body: str) -> tuple[bool, str]:
-    """飞书推送（主渠道）：手机、桌面都能收到。走 lark-cli 的 bot 身份，不受 user token 过期影响。"""
+    """飞书推送（主渠道）：手机、桌面都能收到。走 lark-cli 的 bot 身份，不受 user token 过期影响。
+
+    固定用 profile `nancy` + 该应用下的 open_id。配置里可覆盖（feishu_profile /
+    feishu_open_id），但两者必须成对给出——只换 profile 不换 open_id 会静默发不出去。
+    """
     if not os.path.exists(LARK_CLI):
         return False, "未安装 lark-cli"
     cfg = load_json(CONFIG_FILE, {}) or {}
     if cfg.get("feishu_disabled"):
         return False, "飞书通知已在配置里关闭"
-    uid = cfg.get("feishu_open_id") or ""
-    if not uid:
-        out = run([LARK_CLI, "auth", "status"], timeout=40)
-        m = re.search(r'"openId"\s*:\s*"([^"]+)"', out)
-        if not m:
-            return False, "lark-cli 未授权（跑 lark-cli auth login --recommend 重授权）"
-        uid = m.group(1)
+    profile = cfg.get("feishu_profile") or LARK_PROFILE
+    if profile == LARK_PROFILE and not cfg.get("feishu_profile"):
+        # 旧版本把 Linda 应用下的 open_id 缓存在配置里；那是应用维度的值，拿到 Nancy
+        # 应用上会报 99992361。所以未显式指定 profile 时一律用常量（并覆盖旧缓存）。
+        uid = LARK_OPEN_ID
+    else:
+        uid = cfg.get("feishu_open_id") or ""
+        if not uid:
+            out = run([LARK_CLI, "auth", "status", "--profile", profile], timeout=40)
+            m = re.search(r'"openId"\s*:\s*"([^"]+)"', out)
+            if not m:
+                return False, f"飞书发送配置缺失：profile {profile} 没有可用的 open_id"
+            uid = m.group(1)
+    if cfg.get("feishu_open_id") != uid or cfg.get("feishu_profile") != profile:
+        cfg["feishu_profile"] = profile
         cfg["feishu_open_id"] = uid
         save_json(CONFIG_FILE, cfg)
 
@@ -349,8 +367,8 @@ def _notify_feishu(title: str, body: str) -> tuple[bool, str]:
     key = f"gw-{os.getpid()}-{int(time.time())}"
     try:
         r = subprocess.run(
-            [LARK_CLI, "im", "+messages-send", "--as", "bot", "--user-id", uid,
-             "--text", text, "--idempotency-key", key],
+            [LARK_CLI, "--profile", profile, "im", "+messages-send", "--as", "bot",
+             "--user-id", uid, "--text", text, "--idempotency-key", key],
             capture_output=True, text=True, timeout=60, env=env,
         )
     except subprocess.TimeoutExpired:
@@ -363,9 +381,11 @@ def _notify_feishu(title: str, body: str) -> tuple[bool, str]:
         m = re.search(r'"message_id"\s*:\s*"([^"]+)"', out)
         if m:
             mid = f" id={m.group(1)}"
-        return True, f"飞书已送达（手机可收）{mid}"
+        return True, f"飞书（{profile}）已送达（手机可收）{mid}"
     if "not found" in out.lower() or "scope" in out.lower():
         return False, "飞书发送失败：应用权限不足（需 im:message）"
+    if "99992361" in out:
+        return False, "飞书发送失败：open_id 与应用不匹配（open_id 是应用维度的，换应用要同时换 open_id）"
     reason = ""
     m = re.search(r'"msg"\s*:\s*"([^"]+)"', out)
     if m:
