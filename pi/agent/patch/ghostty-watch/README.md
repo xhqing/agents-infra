@@ -39,8 +39,10 @@ tmux 解决的是「工作不丢」；本工具解决的是「**是否被杀过�
 
 ### 飞书通知
 
-- 走 `lark-cli im +messages-send --as bot`，对你的 open_id 发单聊；机器人身份用应用凭证，不受 user token 过期影响。
-- open_id 首次自动从 `lark-cli auth status` 读取，缓存到 `~/.local/state/ghostty-watch/config.json`（本机文件，不进仓库）。
+- 走 `lark-cli --profile nancy im +messages-send --as bot`，对你的 open_id 发单聊；机器人身份用应用凭证，不受 user token 过期影响。
+- **发送方固定是 Nancy（Kit 的助手），不是 Linda**（2026-11-15 用户立：Linda 是 Victor 的专属 assistant，这个通知与本机工具链无关，不该蹭 Victor 的机器人）。
+- open_id 是**应用维度**的——同一个人在不同应用下 open_id 不同。Nancy 应用下的 open_id 与本机默认 profile（Linda）不同，代码里写成常量 `LARK_OPEN_ID`，首次发送时回写进 `~/.local/state/ghostty-watch/config.json`（本机文件，不进仓库）。换应用时必须同时换 open_id，否则飞书报 `99992361`（脚本会把这个错误单独提示出来）。
+- 前提：本机 `lark-cli` 里有名为 `nancy` 的 profile（`lark-cli profile list` 可查）。缺了就加：`lark-cli profile add --name nancy --app-id <Nancy 的 App ID> --app-secret-stdin`。
 - 飞书域名必须直连：脚本内已强制 `NO_PROXY=feishu.cn,.feishu.cn,larksuite.com,...`。
 - 临时关掉飞书（只留桌面通知）：在 config.json 里加 `"feishu_disabled": true`。
 - 发送失败会在事件日志里写具体原因（权限不足 / 超时），并自动回退到桌面通知。
@@ -92,5 +94,5 @@ python3 ~/.pi/agent/patch/ghostty-watch/watch.py notify-test   # 跑完整通知
 
 纯标准库 + `/usr/bin/python3`（macOS 自带），不需要 pip。
 
-- **必需**：`lark-cli`（`~/.local/bin/lark-cli`，飞书通知）。
+- **必需**：`lark-cli`（`~/.local/bin/lark-cli`，飞书通知），且其中要有名为 `nancy` 的 profile（Nancy 应用的凭证）。缺了就只有桌面通知 + 终端横幅，事件日志会写明原因。
 - 可选：`brew install terminal-notifier` + 系统设置里授权（不装也不影响）。
