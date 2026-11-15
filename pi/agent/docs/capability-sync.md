@@ -36,10 +36,6 @@
 python3 ~/.pi/agent/patch/agents-infra-publish/publish.py            # 发布（无变化则什么都不做）
 python3 ~/.pi/agent/patch/agents-infra-publish/publish.py --check    # 只检查是否已一致
 python3 ~/.pi/agent/patch/agents-infra-publish/publish.py --dry-run  # 看会改哪些文件
-
-# dsh/：也在 macmini 上（~/.dsh 由 Syncthing 双机双向同步）
-python3 ~/.pi/agent/patch/agents-infra-publish/publish_dsh.py
-python3 ~/.pi/agent/patch/agents-infra-publish/publish_dsh.py --check
 ```
 
 脚本做的事（顺序固定）：
@@ -47,7 +43,7 @@ python3 ~/.pi/agent/patch/agents-infra-publish/publish_dsh.py --check
 1. **等 Syncthing 收敛**：查 `/rest/db/status?folder=pi-agent`，两边都 `idle` 才继续——否则会把
    「只同步到一半的全局目录」发布出去（最坑的形态是 `AGENTS.md` 引用了还没到的 skill）。
 2. **拒绝发布冲突副本**：发现 `*.sync-conflict-*` 直接报错退出（说明能力层本身要人管了）。
-3. **单向 rsync** 五部分 + npm 清单到仓库的 `pi/agent/`；`dsh/` 由 `publish_dsh.py` 单独发布（排除本机产物与本机私有配置）。
+3. **单向 rsync** 五部分 + npm 清单到仓库的 `pi/agent/`（排除本机产物与本机私有配置）。
 4. **生成 CHANGELOG 条目**（列出本次变更文件）+ 按需 bump 版本号。
 5. **提交 → 推分支 → 开 PR → `gh pr merge --auto`**（remote main 锁定，不允许直推）。
 6. 合并后快进本地 main。
@@ -65,11 +61,11 @@ python3 ~/.pi/agent/patch/agents-infra-publish/publish_dsh.py --check
 | `extensions/` | `pi/agent/extensions/` | 工具强制类扩展 |
 | `npm/`（清单） | `pi/agent/npm/` | `package.json` / `package-lock.json` + `PACKAGES.md`（`patch/npm-manifest/refresh.py` 生成） |
 
-**`dsh/` 是独立子树**：源是 `~/.dsh/`（双机双向同步），由 Syncthing `dsh` 文件夹（双向）同步到 macmini，再由 macmini 的 `patch/agents-infra-publish/publish_dsh.py` 发布到 `agents-infra/dsh/`。`pi/agent/` 与 `dsh/` 都在 macmini 发布，路径不相交。
+**只有一个子树**：`pi/agent/`。pi-alt-team（`~/.pi-alt/`）是私有团队，规则与配置**不进 agents-infra**，只走 Syncthing `pi-alt` 文件夹双机同步。
 
 **不进镜像**：
 
-- `~/.dsh/` 的凭证、会话、附件、storages、node_modules、settings import；`dsh/` 只镜像 secret-free 核心（由 `publish_dsh.py` 发布）
+- `~/.pi-alt/` 整体不进镜像（私有团队）：凭证、会话、`sessions/`、`state/`、`logs/`、`node_modules/`
 - 运行时与架构相关：`sessions/`、`state/`、`logs/`、`tmp/`、`intercom/`、`npm/`（包本体）、`bin/`
 - 本机私有配置：`trust.json`、`mcp-project-approvals.json`、`skills/anysearch/runtime.conf`、
   `skills/anysearch/.env`、`skills/backup/endpoints/*`、`patch/session-link/*.json`

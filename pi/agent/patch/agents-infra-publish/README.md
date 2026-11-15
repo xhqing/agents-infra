@@ -5,7 +5,7 @@
 ## 一句话
 
 把 `~/.pi/agent`（五部分 + npm 清单）单向发布到 `agents-infra/pi/agent/`，**只允许在 macmini 上跑**。
-`dsh/` 也由 macmini 上的 `publish_dsh.py` 发布；`~/.dsh` 由 Syncthing 双机双向同步。两个子树路径不相交。
+只发布 `pi/agent/` 一个子树。pi-alt-team（`~/.pi-alt/`）是私有团队，规则与配置不进 agents-infra，只走 Syncthing `pi-alt` 文件夹双机同步。
 
 ## 命令
 
@@ -13,9 +13,6 @@
 python3 ~/.pi/agent/patch/agents-infra-publish/publish.py            # 在 macmini 发布 pi/agent
 python3 ~/.pi/agent/patch/agents-infra-publish/publish.py --check    # 只查是否一致
 python3 ~/.pi/agent/patch/agents-infra-publish/publish.py --dry-run  # 看会改哪些文件
-
-# dsh/：也在 macmini 上（~/.dsh 双机双向同步）
-python3 ~/.pi/agent/patch/agents-infra-publish/publish_dsh.py
 ```
 
 ## 它为什么这么做
@@ -37,13 +34,13 @@ python3 ~/.pi/agent/patch/agents-infra-publish/publish_dsh.py
 
 清单在 `publish.py` 的 `EXCLUDES`，与 `docs/capability-sync.md` 第四节必须保持一致。
 
-## DSH 核心基础设施
+## 私有团队（pi-alt-team）
 
-`~/.dsh/` 是 dsh-team 的权威源（双机双向同步）。Syncthing 的 `dsh` 文件夹（双向）
-把 secret-free 核心同步到 macmini；`publish_dsh.py`（macmini）再发布到 `agents-infra/dsh/`。
-`publish.py` 只管 `pi/agent/`，两个子树路径不相交。
+`~/.pi-alt/` 是 pi-alt-team 的权威源（双机双向同步，Syncthing folder id `pi-alt`）。
+它是私有团队，**不进 agents-infra 镜像**——`publish.py` 只管 `pi/agent/`。
 
-DSH 的排除项在 `publish_dsh.py` 的 `EXCLUDES`，与 `docs/dsh-team.md` 第 5b 节保持一致。
+pi-alt 的身份实现（brand 目录 + wrapper）与验收标准见 `pi-harness` 仓库 Issue #64，
+架构说明见 `docs/pi-alt-team.md`。
 
 ## 失败排查
 
