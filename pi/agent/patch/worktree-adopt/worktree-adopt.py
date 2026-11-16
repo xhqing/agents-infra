@@ -47,6 +47,9 @@ COMMIT_STATE = HOME / ".pi" / "agent" / "state" / "commit-mode.json"
 # worktree 所有权日志（与 worktree-name-guard.ts 共用）：settle-repo-check 按 path 反查
 # 「建它的会话」，把「已合并、可清理」的提示发给那个会话，而不是无差别发给当前会话。
 WORKTREE_LOG = HOME / ".pi" / "agent" / "state" / "worktrees.jsonl"
+# 「已搬过、等合并」状态（2026-11-16）：主工作区保留改动期间，main-wip-guard 靠它避免
+# 把同一批改动反复搬进新 worktree；finalize 成功后清掉。
+HOLD_STATE = HOME / ".pi" / "agent" / "state" / "adopt-hold.json"
 MAIN_BRANCHES = ("main", "master")
 
 
@@ -216,6 +219,40 @@ def tracked_paths(repo: Path) -> set[str]:
     return {p for p in r.stdout.split("\0") if p}
 
 
+def write_hold(root: Path, worktree: Path, branch: str, paths: list[str]) -> None:
+    """记下「这个仓库的改动已经复制进 worktree，主工作区保留着等合并」。"""
+    try:
+        HOLD_STATE.parent.mkdir(parents=True, exist_ok=True)
+        data: dict = {}
+        if HOLD_STATE.exists():
+            data = json.loads(HOLD_STATE.read_text(encoding="utf-8"))
+        data[str(root)] = {
+            "ts": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "worktree": str(worktree),
+            "branch": branch,
+            "paths": paths,
+        }
+        HOLD_STATE.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+    except (OSError, ValueError):
+        pass
+
+
+def clear_hold(root: Path) -> None:
+    try:
+        if not HOLD_STATE.exists():
+            return
+        data = json.loads(HOLD_STATE.read_text(encoding="utf-8"))
+        if str(root) in data:
+            data.pop(str(root), None)
+            HOLD_STATE.write_text(
+                json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            )
+    except (OSError, ValueError):
+        pass
+
+
 def finalize(root: Path, ref: str) -> int:
     """合并后收尾：改动全部已进 ref 才丢弃工作区改动并快进。"""
     branch = git(root, "branch", "--show-current").stdout.strip()
@@ -231,6 +268,7 @@ def finalize(root: Path, ref: str) -> int:
         print(merged.stdout.strip() or "[INFO] 已是最新")
         if merged.returncode != 0:
             return die(f"快进失败：{merged.stderr.strip()}")
+        clear_hold(root)
         print("[DONE] 主工作区本来就干净，已快进对齐")
         return 0
 
@@ -271,6 +309,7 @@ def finalize(root: Path, ref: str) -> int:
         return 1
 
     head = git(root, "rev-parse", "--short", "HEAD").stdout.strip()
+    clear_hold(root)
     print(f"[DONE] 已丢弃 {len(items)} 个已进 {ref} 的改动，并把主工作区快进到 {head}")
     return 0
 
@@ -383,6 +422,7 @@ def main() -> int:
 
     if args.hold:
         # 默认：只复制、不清理——PR 期间主工作区继续显示改动后的内容
+        write_hold(root, worktree, branch_name, moved)
         print("HOLD=1")
         print("[DONE] 改动已复制到 worktree；主工作区保留原样（PR 期间不会变回旧版本）")
         print(f"[NEXT] 合并后收尾：python3 {Path(__file__).resolve()} --finalize --repo {root}")
