@@ -320,6 +320,29 @@ def finalize(root: Path, ref: str) -> int:
     return 0
 
 
+def cmux_open_files() -> set[str]:
+    """cmux 里以 markdown 面板打开的文件名集合（没装 cmux / 没在运行 → 空集）。
+
+    2026-11-16 用户立规：文件在 cmux 里开着，说明用户正在看或编辑——此时任何自动搬运
+    都会让他看到内容变化，所以不搬、不改，只提示。cmux 面板标题就是文件名。
+    """
+    try:
+        r = sh(["cmux", "list-panels"])
+    except (FileNotFoundError, OSError):
+        return set()
+    if r.returncode != 0:
+        return set()
+    names: set[str] = set()
+    for line in r.stdout.splitlines():
+        parts = line.split()
+        if "markdown" not in parts or len(parts) < 3:
+            continue
+        title = parts[-1].strip().strip('"')
+        if title:
+            names.add(title)
+    return names
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="把主工作区 main 上的改动搬到新的 worktree")
     ap.add_argument("--repo", default=".", help="仓库路径（默认当前目录）")
@@ -334,6 +357,8 @@ def main() -> int:
                     help="合并后收尾：确认改动已进 ref 后丢弃工作区改动并快进")
     ap.add_argument("--ref", default="origin/main",
                     help="--finalize 用来比对的 ref（默认 origin/main）")
+    ap.add_argument("--ignore-open", action="store_true",
+                    help="即使文件正在 cmux 里打开也强制搬运（默认拒绝，避免打断用户）")
     args = ap.parse_args()
 
     probe = Path(args.repo).expanduser()
@@ -383,6 +408,19 @@ def main() -> int:
         return die(f"目标目录已存在：{worktree}（换个 --slug 或先清理）", 5)
 
     moved = [it["path"] for it in items]
+
+    # 用户正在 cmux 里看 / 编辑这些文件 → 不搬（否则他会看到文件内容被自动改动）
+    if not args.ignore_open:
+        opened = cmux_open_files()
+        busy = [p for p in moved if Path(p).name in opened]
+        if busy:
+            return die(
+                "这些改动文件在 cmux 里处于打开状态（你正在看或编辑），已暂停自动搬运："
+                + "、".join(busy)
+                + "。如需提交，先关闭对应文件页面（或切到别的文件）再重试；"
+                "确实要强制搬运可加 --ignore-open。",
+                9,
+            )
 
     print(f"[PLAN] 仓库：{root}")
     print(f"[PLAN] 分支：{branch_name}")
