@@ -1,7 +1,8 @@
 # 本文件只被 Ghostty 读。cmux 自 v0.65.2.2-r21 起不再读 ~/.config/ghostty/config，
 # 只读它自己的 ~/.config/cmux/config.ghostty——要改 cmux 的终端外观请改那份。
 # 本文件由 agents-infra 仓库托管（~/Developer/agents-infra/apps/ghostty/config），
-# 软链到 ~/.config/ghostty/config。
+# 系统位置 ~/.config/ghostty/config 是权威源（实际生效的就是它），仓库里那份是镜像。
+# 改完配置跑 apps/publish.sh 把改动收进镜像。
 #
 # 主题：GitHub Dark Default（GitHub 官网标准暗色，背景 #0d1117）
 # theme = Dracula

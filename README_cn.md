@@ -5,7 +5,7 @@
 <div align="center">
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.md)
-[![Version](https://img.shields.io/badge/Version-2.2.0-blue.svg)](#)
+[![Version](https://img.shields.io/badge/Version-2.3.0-blue.svg)](#)
 [![Type](https://img.shields.io/badge/Type-Agents%20Infra-FF1493.svg)](#)
 
 </div>
@@ -32,11 +32,11 @@ agents-infra 是**多智能体团队「共享能力层」的开源镜像**。用
 | `pi/agent/patch/` | 自研补丁脚本与小机制 |
 | `pi/agent/docs/` | 参考文档：智能体名册、能力同步、跨机镜像、发版流程 |
 | `pi/agent/npm/` | 第三方 pi 包清单（声明 + 锁文件，不含包内容） |
-| `apps/` | agent 会话真正跑在其中的终端 App 配置（ghostty、cmux），以及把它们软链到系统位置的安装 / 检查脚本 |
+| `apps/` | agent 会话所运行终端 App（ghostty、cmux）配置的镜像，以及配套的部署 / 发布 / 校验脚本 |
 
-`pi/agent/` 是生成出来的镜像。`apps/` 则**人工维护**、没有脚本重新生成它：那里的配置是被软链到 `~/.config/` 的活文件，终端配错就等于每个跑在里面的 agent 都配错。目录结构与维护方式见 [`apps/README_cn.md`](apps/README_cn.md)。
+两半都是**镜像**，都不在本仓库里直接改：`pi/agent/` 镜像全局 `~/.pi/agent/`；`apps/` 镜像 `~/.config/` 下生效的那几个文件——那边以生效文件为权威源、**不建软链**，因为 App 的原子写会把软链默默换成普通文件。详见 [`apps/README_cn.md`](apps/README_cn.md)。
 
-`pi/agent/` 下的内容都不是运行依赖：团队直接加载 `~/.pi/agent/`，本仓库只是发布出来的快照。`apps/` 正好相反——它的文件软链进系统，就是当前生效的配置。
+`pi/agent/` 下的内容都不是运行依赖：团队直接加载 `~/.pi/agent/`，本仓库只是发布出来的快照。`apps/` 则放着真正在驱动终端的配置副本——换新机器用 `apps/install.sh` 部署，改完设置用 `apps/publish.sh` 刷新。
 
 ---
 
