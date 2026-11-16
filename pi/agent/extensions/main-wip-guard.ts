@@ -47,9 +47,14 @@ const HOME = homedir();
 const ADD_STATE = join(HOME, ".pi", "agent", "state", "add-mode.json");
 const COMMIT_STATE = join(HOME, ".pi", "agent", "state", "commit-mode.json");
 const ADOPT = join(HOME, ".pi", "agent", "patch", "worktree-adopt", "worktree-adopt.py");
+// 「已搬过、等合并」状态（worktree-adopt.py 的 HOLD 模式写、finalize 成功清）：
+// 主工作区保留改动期间，靠它避免把同一批改动反复搬进新 worktree。
+const HOLD_STATE = join(HOME, ".pi", "agent", "state", "adopt-hold.json");
 const MAIN_BRANCHES = new Set(["main", "master"]);
 const MAX_KICKS = 3;
 const COOLDOWN_MS = 5 * 60 * 1000;
+// 「文件正被打开」提示的冷却（同一批文件 10 分钟内只提示一次）
+const OPEN_NOTICE_COOLDOWN_MS = 10 * 60 * 1000;
 
 function git(cwd: string, args: string[]): { ok: boolean; out: string } {
 	try {
@@ -105,6 +110,20 @@ interface RepoState {
 	staged: boolean;
 }
 
+/** 这个仓库是否已被 worktree-adopt 复制过、改动还在主工作区等合并；是则返回那批路径。 */
+function heldPaths(root: string): string[] | null {
+	try {
+		const data = JSON.parse(readFileSync(HOLD_STATE, "utf-8")) as Record<
+			string,
+			{ paths?: string[] }
+		>;
+		const paths = data[root]?.paths;
+		return Array.isArray(paths) ? paths : null;
+	} catch {
+		return null;
+	}
+}
+
 function inspect(cwd: string): RepoState | null {
 	const top = git(cwd, ["rev-parse", "--show-toplevel"]);
 	if (!top.ok || !top.out.trim()) return null;
@@ -113,21 +132,43 @@ function inspect(cwd: string): RepoState | null {
 	const branch = git(root, ["branch", "--show-current"]).out.trim();
 	if (!MAIN_BRANCHES.has(branch)) return null;
 
-	const status = git(root, ["status", "--porcelain"]);
+	const status = git(root, ["status", "--porcelain", "-z"]);
 	if (!status.ok || !status.out.trim()) return null;
 	const changed = status.out
-		.split("\n")
-		.filter((line) => line.trim() !== "")
-		.map((line) => line.slice(3));
+		.split("\0")
+		.filter((entry) => entry.trim() !== "")
+		.map((entry) => entry.slice(3));
 	const staged = git(root, ["diff", "--cached", "--quiet"]).ok === false;
 
 	return { root, branch, changed, staged };
+}
+
+/** cmux 里以 markdown 面板打开的文件名集合（没装 cmux / 没在运行 → 空集）。 */
+function cmuxOpenMarkdown(): Set<string> {
+	const names = new Set<string>();
+	try {
+		const out = execFileSync("cmux", ["list-panels"], {
+			encoding: "utf-8",
+			timeout: 5000,
+			stdio: ["ignore", "pipe", "ignore"],
+		});
+		for (const line of out.split("\n")) {
+			const parts = line.trim().split(/\s+/);
+			if (!parts.includes("markdown")) continue;
+			const title = (parts[parts.length - 1] ?? "").replace(/^"|"$/g, "");
+			if (title) names.add(title);
+		}
+	} catch {
+		// cmux 不在 / 未运行 → 视为没有打开的文件
+	}
+	return names;
 }
 
 export default function (pi: ExtensionAPI) {
 	let kicks = 0;
 	let lastKickAt = 0;
 	let lastRoot = "";
+	let lastOpenNoticeAt = 0;
 
 	pi.on("agent_settled", async (_event, ctx) => {
 		try {
@@ -142,6 +183,35 @@ export default function (pi: ExtensionAPI) {
 			const paused = pausedByMode(state.root);
 			dbg(`paused=${paused}`);
 			if (paused) return;
+
+			// 已经把改动复制进 worktree、只等 PR 合并 → 不再重复搬（否则会建出第二个 worktree）
+			const held = heldPaths(state.root);
+			if (held && state.changed.every((p) => held.includes(p))) {
+				dbg(`held in worktree, skip kick root=${state.root}`);
+				return;
+			}
+
+			// 改动文件正被用户在 cmux 里打开（看或编辑）→ 暂停自动搬运，只提示
+			const opened = cmuxOpenMarkdown();
+			const busy = state.changed.filter((p) => opened.has(p.split("/").pop() ?? ""));
+			if (busy.length > 0) {
+				dbg(`opened in cmux, skip kick: ${busy.join(", ")}`);
+				const nowOpen = Date.now();
+				if (nowOpen - lastOpenNoticeAt < OPEN_NOTICE_COOLDOWN_MS) return;
+				lastOpenNoticeAt = nowOpen;
+				pi.sendMessage(
+					{
+						customType: "main-wip",
+						display: true,
+						content:
+							`【main-wip】这些文件还有未提交改动，但它们正在 cmux 里打开：${busy.join("、")}。\n` +
+							`你在看或编辑它们，因此自动建 worktree → 提交 → PR 的流程已暂停（否则你会看到文件内容被自动改动）。\n` +
+							`要提交时：先关掉对应的文件页面（或切到別的文斈），再说一声提交即可。`,
+					},
+					{ deliverAs: "followUp" },
+				);
+				return;
+			}
 
 			const now = Date.now();
 			if (now - lastKickAt < COOLDOWN_MS) return;
@@ -161,9 +231,10 @@ export default function (pi: ExtensionAPI) {
 					content:
 						`【main-wip】主工作区 \`${state.root}\` 停在 ${state.branch} 上，还有 ${state.changed.length} 处未提交改动（${preview}${state.changed.length > 8 ? " …" : ""}）。\n` +
 						`按 2026-11-05 规则（用户立规，所有 Agent 遵循）：local main 不承载写操作，这些改动要**自动**搬到功能分支的 worktree 再提交，不询问、不汇报。现在做：\n` +
-						`1. \`python3 ${ADOPT} --repo ${state.root}\`（脚本会建 worktree、逐路径复制、校验一致后才清理主工作区；失败会回滚，主工作区不动）。输出里取 \`WORKTREE=\` 与 \`BRANCH=\`。\n` +
+						`1. \`python3 ${ADOPT} --repo ${state.root}\`（脚本会建 worktree、逐路径复制，**主工作区保留原样**；失败会回滚，主工作区不动）。输出里取 \`WORKTREE=\` 与 \`BRANCH=\`。\n` +
 						`2. 在 worktree 上用 \`git -C <WORKTREE>\` 走 /add 预检 → /commit（含 PR 与 CI 合并），全部 git 命令带 \`-C\`，不要 cd。\n` +
-						`3. 脚本拒绝执行时（暂存区有内容 / 有冲突 / add-mode 或 commit-mode 为手动）就停下，按它给的提示处理，不要绕过。`,
+						`3. PR 合并后回主工作区跑 \`python3 ${ADOPT} --finalize --repo ${state.root}\` 收尾（校对 origin/main、丢弃已进 main 的改动并快进），否则主工作区会一直挂着「改动」。\n` +
+						`4. 脚本拒绝执行时（暂存区有内容 / 有冲突 / add-mode 或 commit-mode 为手动）就停下，按它给的提示处理，不要绕过。`,
 				},
 				{ deliverAs: "followUp", triggerTurn: true },
 			);
