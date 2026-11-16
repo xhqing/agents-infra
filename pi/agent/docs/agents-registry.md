@@ -105,8 +105,7 @@
 | assistant-agent（Kit） | vscode-copy-anywhere | 让 VSCode 资源管理器里复制的文件能粘到任意 App 的 macOS 后台小工具（Finder / 微信 / 浏览器上传框等；后台把 VSCode 私有剪贴板格式转成系统格式；2026-10-08 建立、2026-10-09 登记；2026-10-30 由 `copybridge` 改名为现名——原名看不出用途） |
 | assistant-agent（Kit） | ark-key-pool | pi 的火山方舟 Agent Plan 多 Key 自动切换扩展（不同账号的 Key 组成池，额度耗尽 / Key 失效自动切下一个，冷却跨进程共享；项目 `~/Developer/ark-key-pool`，2026-10-22 建立；已开源 github.com/xhqing/ark-key-pool（2026-10-22，v0.1.0）） |
 | assistant-agent（Kit） | macmini-tmux | 在 Mac mini 上方便使用 tmux 的 CLI 封装（`macmini tmux` 不带参数时每次新开会话、名字自动递增 `session#N`；`-s` 按名字接上 / 新建、`-a` 接回最近会话、`-l` 列表；另可透传任意命令到 macmini；项目 `~/Developer/macmini-tmux`，2026-10-29 建立；已开源 github.com/xhqing/macmini-tmux（2026-10-29，v0.1.0）） |
-| assistant-agent（Kit） | agents-infra | 全团队通用能力底座的开源镜像（沿革：CapabilityManagerAgent → 2026-11-05 降级为普通项目并更名 TeamToolkit → 2026-11-11 更名为 agents-infra；仓库内 `pi/agent/` 逐字节镜像全局 `~/.pi/agent/`；发布改为 macmini 单 pusher，见 `docs/capability-sync.md`） |
-| assistant-agent（Kit） | dotfiles | 按 App 分类的个人配置文件仓库（项目 `~/Developer/dotfiles`，2026-10-31 建立，远程 `github.com/xhqing/dotfiles`；2026-11-02 按「团队项目一律 public」改公开并锁 main）：配置文件在仓库里只存一份，安装时软链到系统位置，新机器 clone + `./install.sh` 一键恢复；目前收录 ghostty / cmux 两个 App，**`ghostty/config` 被 Ghostty 与 cmux 共用**（cmux 基于 libghostty 读同一份配置），共用关系在仓库根 README 的「共用配置文件」表与各 App 目录 README 里注明 |
+| assistant-agent（Kit） | agents-infra | 全团队通用能力底座的开源出口（沿革：CapabilityManagerAgent → 2026-11-05 降级为普通项目并更名 TeamToolkit → 2026-11-11 更名为 agents-infra）：`pi/agent/` 逐字节镜像全局 `~/.pi/agent/`（macmini 单 pusher 发布，见 `docs/capability-sync.md`）；`apps/` 收承载 agent 会话的终端 App 配置（ghostty、cmux）与部署脚本，**人工维护、不由发布脚本生成**（2026-11-16 由 dotfiles 项目整体迁入） |
 | dev-agent（Atlas） | XPilot | Xray-core 节点管理 CLI（Python）：代理节点真实流量测速与连通性检测 → 自动选路（纯延迟 / 纯带宽 / 混合）→ 故障转移 → 订阅刷新（2026-10-26 由 NetOpsAgent / Hermes 移交 Atlas，原负责 Agent 已注销） |
 | NeuralCoreAgent（Ada） | AgentCortex | 深度推理引擎规则集（三套推理引擎：Infinite / Rapid / Incisive） |
 | NeuralCoreAgent（Ada） | ToolCallingRules | LLM 工具调用规则集（2026-11-02 按「团队项目一律 public」由私有改公开并锁 main；22 条规则 / 7 类，注入 system prompt 以减少 function calling 的参数格式错误与不安全重试、提升调用准确率；PolyForm-Noncommercial；2026-10-31 用户决定由 Ada 接手负责，此前是未登记的历史独立项目） |
@@ -125,6 +124,7 @@
 - **已恢复登记的私有子项目（2026-11-12 用户决定）**：**NewsScoreStudy**（Mark 负责，私有远程 `github.com/xhqing/NewsScoreStudy`；本地目录 2026-10-31 删除、2026-11-12 重新 clone 为 `~/Developer/NewsScoreStudy`）——2026-10-31 曾移出名册；2026-11-12 重新登记为 quant-agent 的 private 子项目，名册只列项目名与链接、不介绍内容。
 - **除名 agent 的本地副本处理口径（2026-10-31 用户立）**：除名的 agent 项目**本地目录一律删除、不在本地保留备份**——只要 GitHub 仓库是最新版即可（删除前先确认工作区干净、与 `origin/main` 同步，避免丢本地改动）。需要查阅时从 GitHub 取。
 - **已取消 / 已退役的子项目（不再维护）**：GitComic、agent-team-playbook-src（Wright）；zcode-cli、zcode-vsce、cmux-launcher（Atlas）；channels-watch（Atlas，2026-10-17 退役）；ResourceMonitor（Alfred）；CyberRipple——本地项目资料删除，GitHub 远端仓库保留为存档（CyberRipple 原未建远端仓库，其组织总览内容已并入 `xhqing` 主页 README）。**blog 已于 2026-11-11 由 Kit 移交 social-agent（Gatsby）、恢复为活跃子项目**，见上方映射表。
+- **dotfiles（Kit，2026-11-16 退役）**：内容整体迁入 agents-infra 的 `apps/`（理由：ghostty 与 cmux 是 agent 运行所依赖的终端，配置错了所有 agent 一起错，属基础设施）。软链目标随之改为 `~/Developer/agents-infra/apps/...`；仓库 `github.com/xhqing/dotfiles` 保留为存档、不再更新。
 
 **名册同步（2026-10-26 用户立，硬性规定 + 工具强制）**：本文件任何改动——新增 / 删除 Agent 项目、子项目新增 / 删除 / 归属变更、Agent 迁机（宿主机归属变化）——必须**在同一批改动里**同步更新 `xhqing` 仓库（`~/Developer/xhqing`）README 的名册表格，也就是「Subprojects (🌐 public · 🔒 private)」那张表（**英文 `README.md` 与中文 `README_cn.md` 两份都要改**，双语文档同步）。不是「下次顺手改」，而是和 registry 改动一起做完。
 

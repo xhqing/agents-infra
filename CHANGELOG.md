@@ -11,6 +11,12 @@
 
 ## 2026-11-16
 
+- **镜像同步（2026-11-16）**：从全局 `~/.pi/agent` 单向发布。
+  **为什么改**：全局能力层有改动，本仓库是它的开源镜像，必须保持一致。
+  **改了什么**：1 个文件——
+  - `pi/agent/docs/agents-registry.md`
+  **回归风险**：无（只同步内容，不改本仓库自身逻辑）。
+
 - **新增 `apps/`：把 dotfiles 项目的 App 配置整体迁入（v2.2.0）**。
   **为什么改**：ghostty 与 cmux 是 agent 运行所依赖的终端，配置错了所有 agent 一起错——它们属于基础设施，不应单独挂在一个侧边仓库、由另一条维护链路管；收进 agents-infra 后，全队「跑起来靠什么」只在一个仓库里就能看全。用户 2026-11-16 决定：dotfiles 的内容全部迁入本项目。
   **改了什么**：① 新增仓库根 `apps/`（人工维护、不由 `publish.py` 生成）：`ghostty/{config,README.md}`、`cmux/{cmux.json,config.ghostty,defaults.plist,README.md}`、`mappings.conf`、`install.sh`、`check.sh`、`export-defaults.sh`、`scripts/{apply-defaults,export-defaults}.py`、`README.md` / `README_cn.md`（原 dotfiles 双版根说明改写）；② 配置注释里的托管路径 `~/Developer/dotfiles/...` 全部改为 `~/Developer/agents-infra/apps/...`，同时删掉 `ghostty/config` 里重复的一行托管说明；③ `check.sh` 的 git 状态检查收窄到本目录（原为整个仓库，会把 `pi/agent/` 待发布的镜像改动误报成 App 配置未提交）；④ 根 `README.md` / `README_cn.md` 补 `apps/` 行与「镜像 vs 活配置」的区分，`AGENTS.md` 补两半结构说明，`.gitignore` 加 `*.bak.*`（install.sh 备份产物）；⑤ 版本号 `2.1.0` → `2.2.0`（新增内容属新增级变更）。
