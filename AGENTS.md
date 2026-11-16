@@ -4,6 +4,15 @@
 
 commit skill 的检测缓存已独立到项目根 [`.commit-cache.md`](.commit-cache.md)（2026-08-03 起从本文件迁出，2026-08-10 按文件命名规范简化文件名），不再寄生在本 `AGENTS.md` 里。
 
+## 两半结构：`pi/agent/` 是镜像，`apps/` 是活配置（2026-11-16）
+
+| 路径 | 维护方式 |
+|---|---|
+| `pi/agent/` | 由 `patch/agents-infra-publish/publish.py`（只在 macmini 上跑）从全局 `~/.pi/agent/` 单向生成。**不要在这里改内容**，改了下次发布会被覆盖 |
+| `apps/` | 人工维护：ghostty 与 cmux 的配置 + `mappings.conf` / `install.sh` / `check.sh` / `export-defaults.sh` / `scripts/`。这些文件被软链到 `~/.config/`，是当前生效的配置 |
+
+`apps/` 不属于镜像范围，`publish.py` 只 rsync `pi/agent/`、清理该目录下的孤儿条目，不会碰它。改 `apps/` 直接在本仓库提交；改 `pi/agent/` 走全局 + 发布脚本。App 配置的机制与注意事项见 [`apps/README_cn.md`](apps/README_cn.md)。
+
 ## 发版声明：不带产物（2026-10-04）
 
 本仓库发版**不带产物**——Release 只含 tag 与 notes，不上传 assets。历史 v1.0.0 的 3 个 skill tar.gz 是当时**借 Release 作备份**的临时用途（用户 2026-10-04 说明），**不代表本仓库的发布惯例**；release skill 的产物核查以本声明为准（未声明产物的项目默认不带产物、直接发布）。
