@@ -8,6 +8,21 @@
 
 - **镜像同步（2026-11-16）**：从全局 `~/.pi/agent` 单向发布。
   **为什么改**：全局能力层有改动，本仓库是它的开源镜像，必须保持一致。
+  **改了什么**：10 个文件——
+  - `pi/agent/AGENTS.md`
+  - `pi/agent/extensions/background-tasks.ts`
+  - `pi/agent/extensions/macmini-use/index.ts`
+  - `pi/agent/extensions/macmini-use/remote.ts`
+  - `pi/agent/patch/session-sweep/session-sweep.py`
+  - `pi/agent/skills/keep-awake/SKILL.md`
+  - `pi/agent/skills/keep-awake/scripts/off.sh`
+  - `pi/agent/skills/keep-awake/scripts/on.sh`
+  - `pi/agent/skills/macmini-use/SKILL.md`
+  - `pi/agent/extensions/bg-tmux-guard.ts`
+  **回归风险**：无（只同步内容，不改本仓库自身逻辑）。
+
+- **镜像同步（2026-11-16）**：从全局 `~/.pi/agent` 单向发布。
+  **为什么改**：全局能力层有改动，本仓库是它的开源镜像，必须保持一致。
   **改了什么**：12 个文件——
   - `pi/agent/AGENTS.md`
   - `pi/agent/docs/magpie-quota.md`

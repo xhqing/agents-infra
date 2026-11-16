@@ -18,9 +18,11 @@ if out=$(pmset -g batt 2>/dev/null); then
   if echo "$out" | grep -q "Battery Power"; then SRC="电池"; fi
 fi
 
-# 后台启动 caffeinate -s，脱离当前 shell（nohup + disown：本脚本退出后继续存活）
-nohup caffeinate -s >/dev/null 2>&1 &
-disown 2>/dev/null || true
+# 后台启动 caffeinate -s：放进独立 tmux 会话。
+# 2026-11-16 全局规则「后台进程一律在 tmux 里跑」：窗口 / 终端挂掉任务也不丢，
+# 且会话名用 pi- 前缀（= agent 自己建的、可被 agent 清理）。
+tmux kill-session -t =pi-keep-awake 2>/dev/null || true
+tmux new-session -d -s pi-keep-awake 'caffeinate -s'
 sleep 0.5
 
 if pgrep -f "caffeinate -s" >/dev/null 2>&1; then
@@ -33,7 +35,7 @@ if pgrep -f "caffeinate -s" >/dev/null 2>&1; then
   else
     echo "⚠️ 未能检测到电源状态：合盖防睡眠仅在接电源时有效，请确认已接电源"
   fi
-  echo "停用：bash ~/.pi/agent/skills/keep-awake/scripts/off.sh"
+  echo "停用：bash ~/.pi/agent/skills/keep-awake/scripts/off.sh（tmux 会话 pi-keep-awake）"
 else
   echo "⚠️ caffeinate 启动失败" >&2
   exit 1

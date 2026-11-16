@@ -7,8 +7,9 @@
  *   - 远端脚本开头固定 PATH：macmini 上 `bash -lc` 会拿到 Node 16（~/.profile 里的
  *     旧 nvm 路径），非登录 shell 的默认 PATH 才是 Node 22；显式钉住顺序，避免
  *     「同一个命令在两台机器上跑出不同 Node 版本」这种隐蔽差异。
- *   - 长任务用 nohup + 独立日志（/tmp/macmini-jobs/），SSH 断了也不影响；日志放
- *     /tmp 是刻意的——那不在 Syncthing 镜像里，不会把日志刷回本机。
+ *   - 长任务用 **tmux 会话** + 独立日志（/tmp/macmini-jobs/），SSH 断了也不影响（2026-11-16
+ *     用户立规：后台进程一律在 tmux 里跑，本机与 macmini 同此）；日志放 /tmp 是刻意的——
+ *     那不在 Syncthing 镜像里，不会把日志刷回本机。
  */
 
 import { spawn } from "node:child_process";
@@ -147,36 +148,55 @@ export function execRemote(script: string, opts: ExecOptions): Promise<ExecResul
 export interface LaunchResult {
 	jobId: string;
 	pid: string;
+	/** 承载任务的远端 tmux 会话名（pi-mm-<jobId>；可 attach 看实时输出）。 */
+	session: string;
 	logPath: string;
 	scriptPath: string;
 	error?: string;
 }
 
 /**
- * 后台启动：把脚本写成远端 /tmp 下的文件，nohup 跑起来，立刻返回日志路径。
+ * 后台启动：把脚本写成远端 /tmp 下的文件，在**独立 tmux 会话**里跑，立刻返回日志路径。
+ * 2026-11-16 用户立规：后台进程一律在 tmux 里跑（SSH 断了 / 终端关了任务也不丢）。
  * 之后用 `macmini_run` 执行 `tail -n 60 <log>` 取进度 / 结果。
  */
 export async function launchRemote(script: string, label: string): Promise<LaunchResult> {
 	const jobId = `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-	const hex = Buffer.from(script, "utf8").toString("hex");
+	const session = `pi-mm-${jobId}`;
 	const scriptPath = `/tmp/macmini-jobs/${jobId}.sh`;
 	const logPath = `/tmp/macmini-jobs/${jobId}.log`;
+	const rcPath = `/tmp/macmini-jobs/${jobId}.rc`;
+	// 输出重定向 / 退出码都写进脚本自己（少一层引号地狱）：tmux 直接 exec 这个脚本即可。
+	const wrapped = [
+		"exec </dev/null",
+		`exec > ${shq(logPath)} 2>&1`,
+		"__pi_bg_finish() {",
+		"  __pi_bg_rc=$?",
+		"  exec >/dev/null 2>&1",
+		`  printf '%s\\n' "$__pi_bg_rc" > ${shq(rcPath)}`,
+		'  exit "$__pi_bg_rc"',
+		"}",
+		"trap __pi_bg_finish EXIT",
+		script,
+	].join("\n");
+	const hex = Buffer.from(wrapped, "utf8").toString("hex");
 	const launcher = [
 		"set -e",
 		"mkdir -p /tmp/macmini-jobs",
 		// 用 hex + xxd 写脚本：避开所有引号 / 换行 / $ 的转义问题。
 		`printf '%s' '${hex}' | xxd -r -p > ${scriptPath}`,
-		`nohup bash ${scriptPath} > ${logPath} 2>&1 < /dev/null &`,
-		'echo "PID=$!"',
+		`tmux kill-session -t =${session} 2>/dev/null || true`,
+		`tmux new-session -d -s ${session} -c "$HOME" /bin/bash ${scriptPath}`,
+		`tmux list-panes -t =${session} -F 'PID=#{pane_pid}'`,
 		label ? `echo "LABEL=${label.replace(/"/g, "")}"` : "true",
 	].join("\n");
 
 	const res = await execRemote(launcher, { timeoutMs: 60_000 });
 	if (res.code !== 0) {
-		return { jobId, pid: "", logPath, scriptPath, error: (res.stderr || res.stdout || "").trim() };
+		return { jobId, pid: "", session, logPath, scriptPath, error: (res.stderr || res.stdout || "").trim() };
 	}
 	const pid = res.stdout.match(/^PID=(\d+)$/m)?.[1] ?? "";
-	return { jobId, pid, logPath, scriptPath };
+	return { jobId, pid, session, logPath, scriptPath };
 }
 
 /** 两机负载概览脚本（macmini_status 用）。 */

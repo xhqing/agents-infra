@@ -145,6 +145,11 @@ def collect() -> list[dict]:
         name, pid, cwd, attached = parts[0], parts[1], parts[2], parts[3]
         if not name.startswith("pi-"):
             continue  # 只管 pi 后台会话，用户自己的 tmux 工作区不碰
+        if name.startswith(("pi-bg-", "pi-mm-")):
+            # 后台任务会话（background_run 的 pi-bg-*、macmini_run 的 pi-mm-*）不是 pi 会话：
+            # 跑多久都是正经工作，绝不能当僵尸清掉（2026-11-16 立规：后台进程跑 tmux，
+            # 目的就是长时间存活、窗口挂了也不丢——清掉等于把工作删了）。
+            continue
         start = parse_lstart(run("ps", "-o", "lstart=", "-p", pid).strip())
         f = session_file_for(cwd, start) if start else None
         idle_min = round((time.time() - f.stat().st_mtime) / 60) if f else None

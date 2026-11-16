@@ -44,8 +44,10 @@ macmini_status()          # 看两机实时负载，判断该不该分流时用
 
 - `cwd` 传**本机路径**即可：`/Users/xhq/Developer/x` → 自动映射成 `/Users/mac/Developer/x`。
   不在 `~/Developer` / `~/.pi/agent` 下的路径会照原样用（远端没有同一份数据，工具会提示）。
-- 长任务用 `background: true`：立即返回 `/tmp/macmini-jobs/job-xxx.log`，之后用
-  `macmini_run` 执行 `tail -n 60 <日志>` 取进度 / 结果。
+- 长任务用 `background: true`：在 macmini 上开一个**独立 tmux 会话**（`pi-mm-<jobId>`）跑，立即返回
+  `/tmp/macmini-jobs/job-xxx.log`，之后用 `macmini_run` 执行 `tail -n 60 <日志>` 取进度 / 结果。
+  （2026-11-16 全局规则：后台进程一律在 tmux 里跑，SSH / 终端断了任务也不丢；停任务：
+  `ssh mac-mini 'tmux kill-session -t pi-mm-<jobId>'`。）
 - 用户手动触发：`/macmini status`、`/macmini <命令>`、`/macmini bg <命令>`。
 
 **输入框下方会亮一行状态提示（2026-11-04 用户立）**：只要真的在用 macmini——调 `macmini_run`
@@ -160,7 +162,7 @@ macmini_run: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   --print-to-pdf=/tmp/out.pdf file:///Users/mac/Developer/<项目>/tmp/page.html
 ```
 
-**长任务 / 批量循环**：用 `background: true`，不要占着一个同步调用：
+**长任务 / 批量循环**：用 `background: true`，不要占着一个同步调用（远端同样跑在 tmux 会话里，SSH 断了不影响）：
 
 ```
 macmini_run(command: "for i in $(seq 1 200); do ./run_case.sh $i; done > /tmp/run-all.log 2>&1", background: true)
@@ -168,6 +170,9 @@ macmini_run(command: "for i in $(seq 1 200); do ./run_case.sh $i; done > /tmp/ru
 macmini_run: tail -n 40 /tmp/macmini-jobs/job-xxxx.log
 macmini_run: pgrep -f /tmp/macmini-jobs/job-xxxx.sh >/dev/null && echo running || echo done
 ```
+
+不要在远端命令里写 `nohup … &` / 裸 `cmd &`——`bg-tmux-guard` 会直接拦（2026-11-16 规则）；
+确实需要后台时用 `background: true`，它会建 tmux 会话并把日志落到 `/tmp/macmini-jobs/`。
 
 ## 六、结果怎么拿回来
 

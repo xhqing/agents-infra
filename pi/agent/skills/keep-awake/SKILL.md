@@ -23,7 +23,7 @@ bash ~/.pi/agent/skills/keep-awake/scripts/on.sh
 
 1. `pgrep` 检查 `caffeinate -s` 是否已在跑，在跑则直接返回「已在跑」；
 2. `pmset -g batt` 检测当前电源（AC / 电池）；
-3. `nohup caffeinate -s` 后台启动并 `disown`，脱离当前 shell 存活；
+3. 在独立 tmux 会话（`pi-keep-awake`）里启动 `caffeinate -s`——全局规则「后台进程一律在 tmux 里跑」（2026-11-16），窗口 / 终端挂掉任务也不丢；
 4. 启动后再次 `pgrep` 确认进程在，失败则报错退出码 1。
 
 **启用成功后，回复用户时必须包含两点：**
@@ -37,7 +37,7 @@ bash ~/.pi/agent/skills/keep-awake/scripts/on.sh
 bash ~/.pi/agent/skills/keep-awake/scripts/off.sh
 ```
 
-`pkill -f "caffeinate -s"` 解除防睡眠。用户说「停用防睡眠」「恢复睡眠」「不需要防睡眠了」等时执行；无进程在跑时输出「无需停用」、不会报错。
+`pkill -f "caffeinate -s"` 解除防睡眠，同时关掉 tmux 会话 `pi-keep-awake`。用户说「停用防睡眠」「恢复睡眠」「不需要防睡眠了」等时执行；无进程在跑时输出「无需停用」、不会报错。
 
 ## 状态查询
 
