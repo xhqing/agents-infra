@@ -199,7 +199,7 @@ export default function (pi: ExtensionAPI) {
 		description:
 			"在 macmini（12 核 x64 / 32GB 常驻算力机）上执行命令，用来把重活从本机分流出去：编译 / 构建 / 测试套件 / 转码 / 批量渲染 / 数据回测 / 大文件扫描 / 大下载。" +
 			"cwd 传本机会话里的路径即可，自动映射成 macmini 的镜像路径（/Users/xhq → /Users/mac）；产物写进 `~/.pi/agent` 或 `~/.dev/private` 会同步回本机（改前需快照）；写在 `~/Developer` 下**不会**回流——项目代码走 GitHub，需要产物就落 /tmp 再 scp，或按流程提交推送。" +
-			"长任务传 background:true，拿到 /tmp/macmini-jobs/ 下的日志路径后，再用本工具执行 tail 取进度 / 结果。" +
+			"长任务传 background:true——它在 macmini 上开一个**独立 tmux 会话**跑（2026-11-16 用户立规：后台进程一律在 tmux 里跑，SSH / 终端断了任务也不丢），返回日志路径后，再用本工具执行 tail 取进度 / 结果。" +
 			"远端前置：x64 / 32GB；2026-11-05 架构改造后项目代码走 GitHub（`~/Developer` 不再同步），只有 `~/.pi/agent` 与 `~/.dev/private` 双向同步——这两个目录允许改删内容但必须先做飞书快照，且目录根本身禁止删除；其余路径的递归删除默认被拒。" +
 			"几秒就能结束的短命令不要用它（SSH 往返更慢），留本机 bash 即可。",
 		promptSnippet: "在 macmini 算力机上跑重活（构建 / 转码 / 回测 / 长任务），给本机减负",
@@ -214,7 +214,7 @@ export default function (pi: ExtensionAPI) {
 			timeout_ms: Type.Optional(
 				Type.Number({ description: `同步等待上限，默认 ${DEFAULT_TIMEOUT_MS}；超过建议用 background:true` }),
 			),
-			background: Type.Optional(Type.Boolean({ description: "后台跑（nohup + /tmp/macmini-jobs 日志），立即返回日志路径" })),
+			background: Type.Optional(Type.Boolean({ description: "后台跑（在 macmini 上开独立 tmux 会话 + /tmp/macmini-jobs 日志），立即返回日志路径" })),
 			label: Type.Optional(Type.String({ description: "任务标签（background 时写进远端启动信息，便于识别）" })),
 		}),
 		async execute(_toolCallId, params, signal, _onUpdate, ctx: ExtensionContext) {
@@ -294,9 +294,11 @@ export default function (pi: ExtensionAPI) {
 							type: "text",
 							text:
 								`[macmini-use] 已在 macmini 后台启动 ${job.jobId}${job.pid ? `（PID ${job.pid}）` : ""}\n` +
+								`tmux 会话：${job.session}（想实时看输出：ssh mac-mini 'tmux attach -t ${job.session}'）\n` +
 								`cwd：${mapped.remote || "(远端 $HOME)"}\n` +
 								`日志：${job.logPath}\n` +
 								`取进度 / 结果：再调 macmini_run 执行 \`tail -n 60 ${job.logPath}\`（进程还在跑时只显示已有输出；看是否结束：\`pgrep -f ${job.scriptPath} >/dev/null && echo running || echo done\`）。` +
+								`停任务：\`ssh mac-mini 'tmux kill-session -t ${job.session}'\`。` +
 								mirroredNote,
 						},
 					],
