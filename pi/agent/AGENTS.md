@@ -343,7 +343,7 @@ Copyright (c) 2026 xhqing and contributors (xhqing/ghostty fork)
 
 - **为什么**：`cmd &` / `nohup cmd &` / `setsid` 这类写法看着「已经放后台了」，但进程挂在终端或 1 号进程下，pi 窗口一关、终端一挂、SSH 一断，长任务跟着没——跑到一半的构建 / 转码 / 回测白跑。tmux 会话独立于终端存活，窗口挂了任务照跑、日志照写，重新 attach 就能看。
 - **怎么做**：① 本机后台任务一律用 `background_run` 工具——它内部就用 `tmux new-session -d` 启动，还会在任务结束时通知唤醒（不要自己再套 nohup）；② macmini 长任务用 `macmini_run` 的 `background:true`——远端同样开独立 tmux 会话（`pi-mm-<jobId>`）；③ 确有需要自己起会话时：`tmux new-session -d -s pi-<名字> -c <目录> '<命令> > <日志> 2>&1'`，会话名**必须 `pi-` 前缀**（判据依据见「会话间协作」节：`pi-` 前缀 = agent 建的、可被 agent 清理）；④ 「后台起、返回前等它」的同步用法可以带 `wait`。
-- **生命周期**：后台任务不随 pi 会话结束而终止（这正是规则的目的）——`background_run` 的任务在 tmux 里继续跑，重开窗口（同一会话 id）会自动「收养」回来继续报完成；要停用 `background_stop` 或 `tmux kill-session -t <pi-名字>`。任务结束（含异常终止）时 tmux 会话自行消失，不会长期堆积。
+- **生命周期**：后台任务不随 pi 会话结束而终止（这正是规则的目的）——`background_run` 的任务在 tmux 里继续跑，重开窗口（同一会话 id）会自动「收养」回来继续报完成；要停用 `background_stop` 或 `tmux kill-session -t <pi-名字>`。任务结束（含异常终止）时 tmux 会话自行消失，不会长期堆积；定时清扫器（`session-sweep`）已排除 `pi-bg-*` / `pi-mm-*`，跑再久也不会被当僵尸会话清掉。
 - **工具强制**：pi 端扩展 `~/.pi/agent/extensions/bg-tmux-guard.ts`——`bash` 与 `macmini_run` 里出现 `nohup` / `setsid` / `disown` / `start-stop-daemon` / `daemonize`、或未被 tmux 包裹的后台 `&` 时直接拦截（引号内与 heredoc 正文里的 `&` 不误报；`&&` / `2>&1` / `&>` / `|&` 等合法形态放行），并给出四种合规写法；每轮还向系统提示注入一行提醒（预防优先）。逃生门：命令末尾加 `# AI_AUTHORIZED_BG_NO_TMUX`（仅限用户当次授权，例如确实要一个不受 tmux 管理的守护进程）。已知局限（诚实声明）：`bash -c "cmd &"` / `ssh host 'cmd &'` 这种把 `&` 塞进引号的间接写法识别不到——本守卫是下限防线，判断靠本条规则。
 
 ### 私有内容目录 `~/.dev/private`（2026-11-05 用户立，工具强制）

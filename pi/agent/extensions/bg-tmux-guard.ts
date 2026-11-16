@@ -23,7 +23,8 @@
  *   - `nohup` / `setsid` / `disown` / `start-stop-daemon` / `daemonize` 等关键词在**原文**
  *     里扫（这些词出现在引号里通常也是真的要后台运行，例如 `ssh host 'nohup x &'`）；
  *   - 单纯的后台符号 `&` 只在**去掉引号与 heredoc 正文之后**扫，避免 `echo "a & b"`、
- *     `awk '{print $1 & $2}'` 这类误报；同时排除 `&&`、`2>&1`、`&>`、`|&` 等合法形态。
+ *     `awk '{print $1 & $2}'` 这类误报；同时排除 `&&`、`2>&1`、`&>`、`|&` 等合法形态，
+ *     算术表达式 `$((a & b))` / `((x &= 3))` 里的位运算 `&` 也不算（已整段挖掉）。
  *   - 已知局限（诚实声明）：`bash -c "cmd &"`、`ssh host 'cmd &'` 这种把 `&` 塞进引号里
  *     的间接写法识别不到——本守卫是下限防线，判断仍靠本规则。
  */
@@ -67,8 +68,21 @@ export function stripQuoted(src: string): string {
 			}
 			continue;
 		}
-		if (ch === "<" && src[i + 1] === "<") {
-			const m = /^<<(-?)\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\2/.exec(src.slice(i));
+		// 算术表达式里的 `&` 是位运算，不是后台符号：`$((a & b))` / `((x &= 3))`
+		if ((ch === "$" && src[i + 1] === "(" && src[i + 2] === "(") || (ch === "(" && src[i + 1] === "(")) {
+			const skip = ch === "$" ? 3 : 2;
+			out += " ";
+			i += skip;
+			let depth = 2;
+			while (i < src.length && depth > 0) {
+				const c = src[i];
+				if (c === "(") depth += 1;
+				else if (c === ")") depth -= 1;
+				i += 1;
+			}
+			continue;
+		}
+		if (ch === "<" && src[i + 1] === "<") {			const m = /^<<(-?)\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\2/.exec(src.slice(i));
 			if (m) {
 				const stripTabs = m[1] === "-";
 				const delim = m[3] as string;
