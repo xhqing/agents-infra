@@ -47,6 +47,9 @@ const HOME = homedir();
 const ADD_STATE = join(HOME, ".pi", "agent", "state", "add-mode.json");
 const COMMIT_STATE = join(HOME, ".pi", "agent", "state", "commit-mode.json");
 const ADOPT = join(HOME, ".pi", "agent", "patch", "worktree-adopt", "worktree-adopt.py");
+// 「已搬过、等合并」状态（worktree-adopt.py 的 HOLD 模式写、finalize 成功清）：
+// 主工作区保留改动期间，靠它避免把同一批改动反复搬进新 worktree。
+const HOLD_STATE = join(HOME, ".pi", "agent", "state", "adopt-hold.json");
 const MAIN_BRANCHES = new Set(["main", "master"]);
 const MAX_KICKS = 3;
 const COOLDOWN_MS = 5 * 60 * 1000;
@@ -105,6 +108,20 @@ interface RepoState {
 	staged: boolean;
 }
 
+/** 这个仓库是否已被 worktree-adopt 复制过、改动还在主工作区等合并；是则返回那批路径。 */
+function heldPaths(root: string): string[] | null {
+	try {
+		const data = JSON.parse(readFileSync(HOLD_STATE, "utf-8")) as Record<
+			string,
+			{ paths?: string[] }
+		>;
+		const paths = data[root]?.paths;
+		return Array.isArray(paths) ? paths : null;
+	} catch {
+		return null;
+	}
+}
+
 function inspect(cwd: string): RepoState | null {
 	const top = git(cwd, ["rev-parse", "--show-toplevel"]);
 	if (!top.ok || !top.out.trim()) return null;
@@ -142,6 +159,13 @@ export default function (pi: ExtensionAPI) {
 			const paused = pausedByMode(state.root);
 			dbg(`paused=${paused}`);
 			if (paused) return;
+
+			// 已经把改动复制进 worktree、只等 PR 合并 → 不再重复搬（否则会建出第二个 worktree）
+			const held = heldPaths(state.root);
+			if (held && state.changed.every((p) => held.includes(p))) {
+				dbg(`held in worktree, skip kick root=${state.root}`);
+				return;
+			}
 
 			const now = Date.now();
 			if (now - lastKickAt < COOLDOWN_MS) return;
