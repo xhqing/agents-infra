@@ -25,7 +25,7 @@
 
 | 路径 | 权威源 | 镜像怎么生成 |
 |---|---|---|
-| `pi/agent/` | `~/.pi/agent/` | `patch/agents-infra-publish/publish.py`，只在 macmini 上跑 |
+| `pi/agent/` | `~/.pi/agent/` | `patch/agents-infra-publish/publish.py`，只在本机（MacBook）上跑 |
 | `apps/` | `~/.config/…`（本机） | `apps/publish.sh`，改完设置手动跑 |
 
 两半都不在这个仓库里直接改：先改生效的那一份，再把镜像发布上来。
