@@ -41,7 +41,7 @@
   然后本地 main 快进同步。`~/Developer` 之间**没有任何同步**。
 - macmini 恢复 GitHub 访问（用**独立凭证**，不与本机共用，见第四节）。
 - 全局能力层 `~/.pi/agent` 两边仍逐字节一致（双向），所以任何一台机器都能改规则 / 技能；
-  **开源镜像只在 macmini 上生成并推送**（单 pusher，见 `docs/capability-sync.md`）。
+  **开源镜像只在本机（MacBook）上生成并推送**（单 pusher，见 `docs/capability-sync.md`；2026-11-16 从 macmini 迁回本机，macmini 上的仓库副本已删除）。
 
 ## 三、同步范围（三个目录）
 
