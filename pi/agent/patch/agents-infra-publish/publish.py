@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""把全局 `~/.pi/agent` 单向发布到 agents-infra 开源仓库（单 pusher：只在 macmini 上跑）。
+"""把全局 `~/.pi/agent` 单向发布到 agents-infra 开源仓库（单 pusher：只在本机 / MacBook 上跑）。
 
 为什么需要
 ----------
@@ -73,6 +73,8 @@ EXCLUDES = [
     "skills/backup/endpoints/",
     "patch/session-link/config.json", "patch/session-link/local-links.json",
     "patch/session-link/chain-registry.json",
+    # skill-custom 的运行时目录（冲突暂存，恒为空；git 不跟踪空目录，同步过去只会造永久 diff）
+    "patch/skill-custom/conflicts/",
     # 本机产物
     "*.log", "*.lock", "__pycache__/", "*.pyc", ".DS_Store", "*.sync-conflict-*",
 ]
@@ -86,6 +88,7 @@ def sh(cmd, cwd=None, check=True):
 
 
 def is_macmini() -> bool:
+    """macmini 上不发布：发布机是本机（用户 2026-11-16 决定，macmini 上的仓库已删除）。"""
     h = platform.node().lower()
     return "mac-mini" in h or "macmini" in h
 
@@ -252,12 +255,11 @@ def scan_mirror(mirror: Path) -> list[str]:
 def note_npm() -> None:
     """npm 清单不由发布机生成。
 
-    `~/.pi/agent/npm/` 是**架构相关**目录、不参与两机同步，发布机（macmini）装的包版本
-    可能与本机（真正装包的那台）不同——在这里跑 refresh.py 会把版本号写回去（2026-11-05
-    实测：macmini 上是 pi-mcp-adapter 7.0.0，本机是 7.0.1）。
-    所以清单只在「装了包的那台机器」上生成，再随内容一起提交：见 README「npm 清单怎么更新」。
+    `~/.pi/agent/npm/` 是**架构相关**目录、不参与两机同步，所以清单必须在**装了包的那台机器**
+    （发布机，即本机）上生成——不同机器装的包版本可能不同（2026-11-05 实测：macmini 上是
+    pi-mcp-adapter 7.0.0、本机是 7.0.1），在别处生成会把版本号写回去。
     """
-    print("[INFO] 跳过 npm 清单（该清单只在装了 pi 包的机器上生成，见 README）")
+    print("[INFO] 跳过 npm 清单（该清单用 patch/npm-manifest/refresh.py 单独生成，见 README）")
 
 
 def changed_files(repo: Path) -> list[str]:
@@ -321,17 +323,17 @@ def main() -> int:
     ap.add_argument("--check", action="store_true", help="只检查是否一致")
     ap.add_argument("--dry-run", action="store_true", help="演示同步内容，不提交")
     ap.add_argument("--allow-non-macmini", action="store_true",
-                    help="允许在非 macmini 上发布（默认禁止，避免双 pusher）")
+                    help="（已废弃，保留兼容）发布机已改成本机")
     args = ap.parse_args()
 
-    if not is_macmini() and not args.allow_non_macmini:
-        print("[ERR] 这个脚本只允许在 macmini 上跑（单 pusher 约定，防止两台机器同时 PR）。\n"
-              "      确实要从这里发布时加 --allow-non-macmini。")
+    if is_macmini():
+        print("[ERR] 不要在 macmini 上发布：发布机是本机（MacBook）。\n"
+              "      macmini 上的 agents-infra clone 已按用户 2026-11-16 决定删除；在本机跑即可。")
         return 2
 
     repo = Path(args.dir).expanduser()
     if not (repo / ".git").exists():
-        print(f"[ERR] 找不到仓库：{repo}（macmini 上应先 git clone github.com/xhqing/agents-infra）")
+        print(f"[ERR] 找不到仓库：{repo}（本机应先 git clone github.com/xhqing/agents-infra）")
         return 2
 
     mirror = repo / MIRROR_SUB

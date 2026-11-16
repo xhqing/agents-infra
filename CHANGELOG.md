@@ -11,6 +11,17 @@
 
 ## 2026-11-16
 
+- **镜像同步（2026-11-16）**：从全局 `~/.pi/agent` 单向发布。
+  **为什么改**：全局能力层有改动，本仓库是它的开源镜像，必须保持一致。
+  **改了什么**：6 个文件——
+  - `pi/agent/AGENTS.md`
+  - `pi/agent/docs/agents-registry.md`
+  - `pi/agent/docs/capability-sync.md`
+  - `pi/agent/docs/macmini-mirror.md`
+  - `pi/agent/patch/agents-infra-publish/README.md`
+  - `pi/agent/patch/agents-infra-publish/publish.py`
+  **回归风险**：无（只同步内容，不改本仓库自身逻辑）。
+
 - **发布机从 macmini 迁回本机（MacBook），macmini 上的副本删除（v2.3.1）**。
   **为什么改**：用户 2026-11-16 决定「agents-infra 只在本机同步和 PR，macmini 禁止掉，macmini 上面的这个项目可以完全删除」。起因：当天发现 macmini 上有其他会话在跑 `publish.py`（十几个小时里造出多个重复镜像 PR 与一个重复发版），两台 pusher 并存会持续制造冗余 PR。
   **改了什么**：① `patch/agents-infra-publish/publish.py` 的 hostname 门禁反转——不再要求 macmini，改为在 macmini 上直接拒绝（`is_macmini()` 保留作负向判据）；② `patch/agents-infra-publish/README.md`、`docs/capability-sync.md`、全局 `AGENTS.md` 的发布机口径全部改写；③ 本仓库 `README.md` / `README_cn.md` / `AGENTS.md` / `.pi/APPEND_SYSTEM.md`、`apps/README.md` / `apps/README_cn.md` 里的「单 pusher/只在 macmini」描述同步更新，`.pi/APPEND_SYSTEM.md` 的「本机不保留 clone」条改为「本机保留 clone 是刚需」；④ macmini 上的 `~/Developer/agents-infra` 已删除；⑤ 版本号 `2.3.0` → `2.3.1`。

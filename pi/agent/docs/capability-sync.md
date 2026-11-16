@@ -25,22 +25,19 @@
 互相 rebase，纯属浪费；更糟的是 macbook 与 macmini 的 `~/.pi/agent` 有若干「各机自维护」的配置，
 两边同时生成还可能把对端的本机配置推上公网。
 
-所以约定：**`pi/agent/` 的镜像只由 macmini 生成并推送**。
+所以约定：**`pi/agent/` 的镜像只由本机（MacBook）生成并推送**。
 
-- macmini：`~/Developer/agents-infra`（负责 `pi/agent/` 发布的那份 clone）
-- macbook：也保留一份 clone（`~/Developer/agents-infra`）——**`apps/` 的发布需要它**：
-  `apps/publish.sh` 把 `~/.config/…` 的生效文件收进这份 clone 再提交。它不发布 `pi/agent/`，
-  只用于发布 / 部署 App 配置与读镜像；发布脚本按 hostname 拒绝在本机跑。
-- 两边是同一个仓库的两份 clone：**同一时间只在一台机器上做 git 写操作**（先 `git pull --ff-only` 再改）。
-  `publish.py` 只 rsync `pi/agent/`、不碰 `apps/`，所以两边各管一半、不会互相覆盖。
-- 需要在新机器上重建发布能力：macmini 上 `git clone` + 配好 `gh` 认证即可，脚本不需要改
+- 本机：`~/Developer/agents-infra`——唯一的 clone、唯一的 pusher，`pi/agent/` 与 `apps/` 都从这里发
+- macmini：**不持有这个仓库**（2026-11-16 用户决定：agents-infra 只在本机同步与 PR，macmini 上的副本已删除）；
+  脚本在 macmini 上跑会被 hostname 校验直接拒绝
+- 需要在新机器上重建发布能力：本机 `git clone` + 配好 `gh` 认证即可，脚本不需要改
 
 ## 三、发不发布、怎么发
 
 **发布 = 单向镜像全局 → 仓库 → 提交 → 推送 → PR → 自动合并。**
 
 ```bash
-# pi/agent：在 macmini 上（本机会话里用 ssh 或 macmini_run 调用都行）
+# pi/agent：在本机跑（发布机＝MacBook；macmini 上已无此仓库，脚本也拒绝在那边跑）
 python3 ~/.pi/agent/patch/agents-infra-publish/publish.py            # 发布（无变化则什么都不做）
 python3 ~/.pi/agent/patch/agents-infra-publish/publish.py --check    # 只检查是否已一致
 python3 ~/.pi/agent/patch/agents-infra-publish/publish.py --dry-run  # 看会改哪些文件
@@ -78,25 +75,22 @@ python3 ~/.pi/agent/patch/agents-infra-publish/publish.py --dry-run  # 看会改
 - `~/.pi-alt/` 整体不进镜像（私有团队）：凭证、会话、`sessions/`、`state/`、`logs/`、`node_modules/`
 - 运行时与架构相关：`sessions/`、`state/`、`logs/`、`tmp/`、`intercom/`、`npm/`（包本体）、`bin/`
 - 本机私有配置：`trust.json`、`mcp-project-approvals.json`、`skills/anysearch/runtime.conf`、
-  `skills/anysearch/.env`、`skills/backup/endpoints/*`、`patch/session-link/*.json`
+  `skills/anysearch/.env`、`skills/backup/endpoints/*`、`patch/session-link/*.json`、`patch/skill-custom/conflicts/*`
 - 项目专用扩展（含具体项目硬编码路径、clone 者用不上的）
 - 本机产物：`*.log`、`*.lock`、`__pycache__/`、`*.pyc`、`*.sync-conflict-*`
 
-## 四之二、npm 清单怎么更新（不走发布机）
+## 四之二、npm 清单怎么更新（不走发布脚本）
 
-`~/.pi/agent/npm/` 是**架构相关**目录（arm64 / x64 各装各的），不参与两机同步，所以：
-
-- **不要**在 macmini 上生成这份清单——它装的包版本可能与本机不同（2026-11-05 实测：
-  macmini 上是 `pi-mcp-adapter` 7.0.0、本机是 7.0.1），在那边跑 `refresh.py` 会把版本号写回去。
-- 正确做法：在**装了 pi 包的那台机器**（本机）上生成到临时目录，再把结果随发布提交：
+`~/.pi/agent/npm/` 是**架构相关**目录（arm64 / x64 各装各的），不参与两机同步，所以清单必须在
+**装了 pi 包的那台机器**（本机，也就是发布机）上生成：
 
 ```bash
-# 本机：生成清单到临时目录
+# 1) 生成清单到临时目录（本机）
 python3 ~/.pi/agent/patch/npm-manifest/refresh.py --dst /tmp/agents-infra-npm
-# 拷到发布机的仓库里（发布机仍是唯一 pusher）
-scp /tmp/agents-infra-npm/* mac-mini:~/Developer/agents-infra/pi/agent/npm/
-# macmini：正常发布
-ssh mac-mini 'python3 ~/.pi/agent/patch/agents-infra-publish/publish.py'
+# 2) 拷进本机 clone 的镜像目录
+cp /tmp/agents-infra-npm/* ~/Developer/agents-infra/pi/agent/npm/
+# 3) 正常发布（清单一起带上去）
+python3 ~/.pi/agent/patch/agents-infra-publish/publish.py
 ```
 
 `publish.py` 默认**不碰** `pi/agent/npm/`，只打印一行提示。
@@ -118,7 +112,7 @@ git -C ~/Developer/agents-infra ls-files pi/agent/docs | wc -l
 | 发布脚本报「Syncthing 未收敛」 | 另一台机器正在写，等几秒重跑；一直不收敛就去 `status.py` 看是不是断链 |
 | 报「发现 sync-conflict 副本」 | 能力层出现冲突副本，人工对比合并后删掉副本，再发布 |
 | 发布成功但内容不对 | 先看 `--check`；再看是不是改了镜像而不是全局（改镜像会被下次发布覆盖） |
-| macmini 不在线 | 先在本机正常改全局；等它上线跑一次发布即可（脚本幂等，不丢改动） |
+| macmini 上跑发布 | 发布机是本机；macmini 上的仓库已删除（2026-11-16），脚本会直接拒绝 |
 
 ## 六、历史（改名前的口径）
 
