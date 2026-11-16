@@ -28,7 +28,7 @@ different maintenance models:
 
 | Path | Source of truth | How the mirror is produced |
 |---|---|---|
-| `pi/agent/` | `~/.pi/agent/` | `patch/agents-infra-publish/publish.py`, one machine only |
+| `pi/agent/` | `~/.pi/agent/` | `patch/agents-infra-publish/publish.py`, on the authoring MacBook only |
 | `apps/` | `~/.config/…` (this machine) | `apps/publish.sh`, run by hand after changing a setting |
 
 Neither half is edited in place: you change the live thing, then publish the mirror.

@@ -5,7 +5,7 @@
 <div align="center">
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.md)
-[![Version](https://img.shields.io/badge/Version-2.3.0-blue.svg)](#)
+[![Version](https://img.shields.io/badge/Version-2.3.1-blue.svg)](#)
 [![Type](https://img.shields.io/badge/Type-Agents%20Infra-FF1493.svg)](#)
 
 </div>
@@ -48,7 +48,7 @@ agents-infra 是**多智能体团队「共享能力层」的开源镜像**。用
 ```
 
 - **全局是权威源**：改动先落在 `~/.pi/agent/`，镜像由它生成。
-- **只有一个设备负责发布**：两台机器持有同一份全局内容，但如果两边都生成镜像，就会造出重复提交与重复 PR（还可能把某一台的本机配置推上公网）。发布脚本在其他机器上会直接拒绝执行。
+- **发布机是本机（MacBook）。** 两台机器持有同一份全局内容（`~/.pi/agent` 走 Syncthing 同步），但如果两边都生成镜像，就会造出重复提交与重复 PR（还可能把某一台的本机配置推上公网）。所以发布只在本机做（2026-11-16 从 macmini 迁回，macmini 上的副本已删除），脚本在 macmini 上会直接拒绝执行。
 - **镜像内容是生成物**：每次发布都会覆盖 `pi/agent/` 下的内容，要改就改全局那一份。
 - **永不发布**：会话记录、运行时状态、本机凭证与机器相关配置，都由发布脚本排除。
 

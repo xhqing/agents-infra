@@ -5,7 +5,7 @@
 <div align="center">
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.md)
-[![Version](https://img.shields.io/badge/Version-2.3.0-blue.svg)](#)
+[![Version](https://img.shields.io/badge/Version-2.3.1-blue.svg)](#)
 [![Type](https://img.shields.io/badge/Type-Agents%20Infra-FF1493.svg)](#)
 
 </div>
@@ -51,7 +51,7 @@ Nothing under `pi/agent/` is a running dependency: the team loads `~/.pi/agent/`
 ```
 
 - **Global is authoritative.** Changes are made in `~/.pi/agent/` first; the mirror is generated from it.
-- **Only one machine publishes.** Both machines hold the same global content, but generating the mirror on two machines would produce duplicate commits and PRs (and could leak one machine's local-only config). The publish script refuses to run elsewhere.
+- **One publisher: the authoring MacBook.** Both machines keep the same global content (`~/.pi/agent` is Syncthing-synced), but generating the mirror on two machines would produce duplicate commits and PRs (and could leak one machine's local-only config). Publishing therefore happens on the MacBook only (moved there on 2026-11-16; the Mac mini copy was deleted), and the script refuses to run on the Mac mini.
 - **Generated, not hand-edited.** Content under `pi/agent/` is overwritten on every publish; edit the global copy instead.
 - **Never published**: session records, runtime state, local credentials, and machine-specific configuration are excluded by the publish script.
 

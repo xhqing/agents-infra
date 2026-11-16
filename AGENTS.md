@@ -8,10 +8,10 @@ commit skill 的检测缓存已独立到项目根 [`.commit-cache.md`](.commit-c
 
 | 路径 | 权威源 | 镜像怎么来 |
 |---|---|---|
-| `pi/agent/` | `~/.pi/agent/` | `patch/agents-infra-publish/publish.py`（只在 macmini 上跑）单向生成。**不要在这里改内容**，改了下次发布会被覆盖 |
+| `pi/agent/` | `~/.pi/agent/` | `patch/agents-infra-publish/publish.py`（只在本机 MacBook 上跑）单向生成。**不要在这里改内容**，改了下次发布会被覆盖 |
 | `apps/` | `~/.config/…` 下生效的那几个文件（本机） | `apps/publish.sh` 手动收集（含 UserDefaults 快照导出与敏感闸门）；`apps/install.sh` 反向部署到新机器；`apps/check.sh` 比对两边 |
 
-两半都是镜像，只是生成方式不同：`pi/agent/` 由脚本在 macmini 上自动生成，`apps/` 由人在本机改完配置后跑 `publish.sh`。`apps/` 不在 `publish.py` 的范围内——它只 rsync `pi/agent/`、只清理该目录下的孤儿条目，不会碰 `apps/`。App 配置的机制与注意事项见 [`apps/README_cn.md`](apps/README_cn.md)。
+两半都是镜像，只是生成方式不同：`pi/agent/` 由脚本在本机自动生成，`apps/` 由人在本机改完配置后跑 `publish.sh`。`apps/` 不在 `publish.py` 的范围内——它只 rsync `pi/agent/`、只清理该目录下的孤儿条目，不会碰 `apps/`。App 配置的机制与注意事项见 [`apps/README_cn.md`](apps/README_cn.md)。
 
 ## 发版声明：不带产物（2026-10-04）
 
