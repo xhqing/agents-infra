@@ -161,9 +161,10 @@ export default function (pi: ExtensionAPI) {
 					content:
 						`【main-wip】主工作区 \`${state.root}\` 停在 ${state.branch} 上，还有 ${state.changed.length} 处未提交改动（${preview}${state.changed.length > 8 ? " …" : ""}）。\n` +
 						`按 2026-11-05 规则（用户立规，所有 Agent 遵循）：local main 不承载写操作，这些改动要**自动**搬到功能分支的 worktree 再提交，不询问、不汇报。现在做：\n` +
-						`1. \`python3 ${ADOPT} --repo ${state.root}\`（脚本会建 worktree、逐路径复制、校验一致后才清理主工作区；失败会回滚，主工作区不动）。输出里取 \`WORKTREE=\` 与 \`BRANCH=\`。\n` +
+						`1. \`python3 ${ADOPT} --repo ${state.root}\`（脚本会建 worktree、逐路径复制，**主工作区保留原样**；失败会回滚，主工作区不动）。输出里取 \`WORKTREE=\` 与 \`BRANCH=\`。\n` +
 						`2. 在 worktree 上用 \`git -C <WORKTREE>\` 走 /add 预检 → /commit（含 PR 与 CI 合并），全部 git 命令带 \`-C\`，不要 cd。\n` +
-						`3. 脚本拒绝执行时（暂存区有内容 / 有冲突 / add-mode 或 commit-mode 为手动）就停下，按它给的提示处理，不要绕过。`,
+						`3. PR 合并后回主工作区跑 \`python3 ${ADOPT} --finalize --repo ${state.root}\` 收尾（校对 origin/main、丢弃已进 main 的改动并快进），否则主工作区会一直挂着「改动」。\n` +
+						`4. 脚本拒绝执行时（暂存区有内容 / 有冲突 / add-mode 或 commit-mode 为手动）就停下，按它给的提示处理，不要绕过。`,
 				},
 				{ deliverAs: "followUp", triggerTurn: true },
 			);

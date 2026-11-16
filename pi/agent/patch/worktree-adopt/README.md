@@ -45,7 +45,19 @@ MOVED=<路径数>
 1. `git worktree add -b <branch> <目录> <HEAD>`；
 2. 按 `git status --porcelain -z` 逐路径复制（含修改、删除、重命名、未跟踪文件与目录，软链接按链接复制）；
 3. **校验** worktree 的改动路径集合与原状态逐路径一致（不多不少）；
-4. 校验通过才 `git restore --worktree` 清理主工作区、删掉已复制的未跟踪文件。
+4. **到这一步结束**——默认只复制、**不清理主工作区**（2026-11-16 用户要求）：PR 走完之前主工作区一直显示改动后的内容，不会出现「改动被搬走后短暂变回旧版本」。输出 `HOLD=1` 和收尾命令；旧行为（复制后立即 `git restore --worktree` 清理）保留为 `--move`。
+
+## 合并后收尾：`--finalize`
+
+```bash
+python3 worktree-adopt.py --finalize --repo <主工作区> [--ref origin/main]
+```
+
+为什么需要这一步：主工作区还挂着改动时，`git merge --ff-only origin/main` 会被 git 拒绝（"Your local changes would be overwritten"，即使内容完全一样），所以不能在合并前清理、也不能不清理。finalize 的做法：
+
+1. 对每个改动路径，比较「工作区文件内容 hash」与「`--ref`（默认 `origin/main`）里同名路径的 hash」；
+2. **全部相等**（证明改动已进 main）→ `git restore --worktree` 丢弃工作区改动、删掉对应未跟踪文件 → `merge --ff-only <ref>` → 主工作区干净且已快进；
+3. **任何一处不等** → 退出码 8 并列出这些路径，**不动任何文件**（说明还有没进 main 的改动）。
 
 ## 边界（诚实）
 

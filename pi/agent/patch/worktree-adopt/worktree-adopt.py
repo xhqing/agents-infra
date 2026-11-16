@@ -11,15 +11,22 @@ add / commit」（已被 git-main-guard 拦死），而是先把改动搬到一�
   2. 暂存区有内容 → 拒绝（暂存区归用户把关，AI 不得删改）；
   3. 有冲突未解决 → 拒绝；
   4. 先建 worktree、把改动逐路径复制过去，**校验复制结果与原状态逐路径一致**，
-     只有校验通过才清理主工作区——任何一步失败都回滚新建的 worktree，主工作区原样不动；
-  5. 输出 `WORKTREE=` / `BRANCH=` / `MOVED=` 三行，供调用方（pi 会话）接着在 worktree
-     里跑 /add → /commit。
+     任何一步失败都回滚新建的 worktree，主工作区原样不动；
+  5. **默认只复制、不清理主工作区（2026-11-16 用户要求）**：PR 走完之前主工作区一直
+     显示改动后的内容，不再出现「改动被搬走后主工作区短暂变回旧版本」的观感。
+     代价是合并前不能对主工作区做 ff merge（脏工作区会被 git 拒绝），所以合并后必须
+     跑一次 `--finalize` 收尾；
+  6. `--finalize`：先逐路径比对「主工作区内容」与「目标 ref（默认 origin/main）」，
+     全部一致（证明改动已进 main）才丢弃工作区改动并快进；一处不一致就报错停下，
+     **绝不盲删**。
 
 用法：
-  worktree-adopt.py                     # 当前目录
+  worktree-adopt.py                     # 当前目录（复制后保留主工作区改动）
   worktree-adopt.py --repo <路径>
   worktree-adopt.py --type fix --slug aipay-timeout
   worktree-adopt.py --dry-run           # 只打印计划，不动任何文件
+  worktree-adopt.py --move             # 旧行为：复制后立即清理主工作区
+  worktree-adopt.py --finalize --repo <路径> [--ref origin/main]   # 合并后收尾（丢弃已进 main 的改动 + 快进）
 """
 
 from __future__ import annotations
@@ -189,6 +196,85 @@ def remove_path(root: Path, rel: str) -> None:
         shutil.rmtree(target)
 
 
+def work_blob(root: Path, rel: str) -> str | None:
+    """工作区文件的内容 hash（git blob 口径）；不存在返回 None。"""
+    target = root / rel
+    if not (target.exists() or target.is_symlink()):
+        return None
+    r = git(root, "hash-object", "--", rel)
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def ref_blob(root: Path, ref: str, rel: str) -> str | None:
+    """ref（如 origin/main）里该路径的内容 hash；不存在返回 None。"""
+    r = git(root, "rev-parse", f"{ref}:{rel}")
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def tracked_paths(repo: Path) -> set[str]:
+    r = git(repo, "ls-files", "-z")
+    return {p for p in r.stdout.split("\0") if p}
+
+
+def finalize(root: Path, ref: str) -> int:
+    """合并后收尾：改动全部已进 ref 才丢弃工作区改动并快进。"""
+    branch = git(root, "branch", "--show-current").stdout.strip()
+    if branch not in MAIN_BRANCHES:
+        return die(f"当前在 {branch or '(detached HEAD)'}，不是 main / master：收尾只对主工作区执行")
+
+    if git(root, "rev-parse", "--verify", "--quiet", ref).returncode != 0:
+        return die(f"找不到 {ref}（先 git fetch origin）")
+
+    items = parse_status(root)
+    if not items:
+        merged = git(root, "merge", "--ff-only", ref)
+        print(merged.stdout.strip() or "[INFO] 已是最新")
+        if merged.returncode != 0:
+            return die(f"快进失败：{merged.stderr.strip()}")
+        print("[DONE] 主工作区本来就干净，已快进对齐")
+        return 0
+
+    # 逐路径比对：工作区最终状态必须与 ref 里的一致，否则一律视为「尚未进 main」
+    pending: list[str] = []
+    for it in items:
+        rels = [it["path"]] + ([it["orig"]] if it.get("orig") else [])
+        for rel in rels:
+            if work_blob(root, rel) != ref_blob(root, ref, rel):
+                pending.append(rel)
+    pending = sorted(set(pending))
+    if pending:
+        return die(
+            f"主工作区还有没进 {ref} 的改动，先合并再收尾（不盲删）："
+            + ", ".join(pending[:8])
+            + (" …" if len(pending) > 8 else ""),
+            8,
+        )
+
+    # 到这里：所有改动都已包含在 ref 里，丢弃它们不会丢任何内容
+    tracked = tracked_paths(root)
+    restored = git(root, "restore", "--worktree", "--", ".")
+    if restored.returncode != 0:
+        return die(f"还原工作区失败：{restored.stderr.strip()}")
+    for it in items:
+        if it["xy"].startswith("??") and it["path"] not in tracked:
+            remove_path(root, it["path"])
+
+    merged = git(root, "merge", "--ff-only", ref)
+    if merged.returncode != 0:
+        return die(f"快进失败：{merged.stderr.strip()}")
+
+    leftover = parse_status(root)
+    if leftover:
+        print("[WARN] 收尾后主工作区仍有改动，请人工确认：")
+        for it in leftover:
+            print(f"  {it['xy']} {it['path']}")
+        return 1
+
+    head = git(root, "rev-parse", "--short", "HEAD").stdout.strip()
+    print(f"[DONE] 已丢弃 {len(items)} 个已进 {ref} 的改动，并把主工作区快进到 {head}")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="把主工作区 main 上的改动搬到新的 worktree")
     ap.add_argument("--repo", default=".", help="仓库路径（默认当前目录）")
@@ -197,6 +283,12 @@ def main() -> int:
     ap.add_argument("--slug", default="", help="分支名主体（默认按改动路径猜）")
     ap.add_argument("--base", default="", help="从哪个提交开 worktree（默认 HEAD）")
     ap.add_argument("--dry-run", action="store_true", help="只打印计划，不动任何文件")
+    ap.add_argument("--move", dest="hold", action="store_false",
+                    help="旧行为：复制后立即清理主工作区（默认是复制后保留，合并完再 --finalize）")
+    ap.add_argument("--finalize", action="store_true",
+                    help="合并后收尾：确认改动已进 ref 后丢弃工作区改动并快进")
+    ap.add_argument("--ref", default="origin/main",
+                    help="--finalize 用来比对的 ref（默认 origin/main）")
     args = ap.parse_args()
 
     probe = Path(args.repo).expanduser()
@@ -204,6 +296,9 @@ def main() -> int:
     if top.returncode != 0:
         return die(f"{probe} 不是 git 仓库：{top.stderr.strip()}", 2)
     root = Path(top.stdout.strip()).resolve()
+
+    if args.finalize:
+        return finalize(root, args.ref)
 
     branch = git(root, "branch", "--show-current").stdout.strip()
     if branch not in MAIN_BRANCHES:
@@ -282,7 +377,18 @@ def main() -> int:
         extra = sorted(after - before)
         return rollback(f"复制校验失败（缺 {missing[:5]} / 多 {extra[:5]}）")
 
-    # 校验通过才清理主工作区
+    print(f"WORKTREE={worktree}")
+    print(f"BRANCH={branch_name}")
+    print(f"MOVED={len(moved)}")
+
+    if args.hold:
+        # 默认：只复制、不清理——PR 期间主工作区继续显示改动后的内容
+        print("HOLD=1")
+        print("[DONE] 改动已复制到 worktree；主工作区保留原样（PR 期间不会变回旧版本）")
+        print(f"[NEXT] 合并后收尾：python3 {Path(__file__).resolve()} --finalize --repo {root}")
+        return 0
+
+    # --move：旧行为，复制后立即清理主工作区
     restored = git(root, "restore", "--worktree", "--", ".")
     if restored.returncode != 0:
         return rollback(f"主工作区还原失败：{restored.stderr.strip()}")
@@ -295,9 +401,6 @@ def main() -> int:
         for it in leftover:
             print(f"  {it['xy']} {it['path']}")
 
-    print(f"WORKTREE={worktree}")
-    print(f"BRANCH={branch_name}")
-    print(f"MOVED={len(moved)}")
     print(f"[DONE] 改动已搬到 worktree；接着在那里执行 /add → /commit（git -C {worktree} …）")
     return 0
 
