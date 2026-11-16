@@ -13,7 +13,10 @@
 - 仓库：`github.com/xhqing/agents-infra`（旧地址 `TeamToolkit` / `CapabilityManagerAgent` 由 GitHub 自动重定向）
 - 权威源：全局 `~/.pi/agent/`（两机之间用 Syncthing 双向同步，逐字节一致）
 - 镜像位置：仓库里的 `pi/agent/`，路径与全局一一对应
-- 该项目**只做镜像发布**：任何改动的源头都在全局，不要去镜像里改内容（改了也会被下一次发布覆盖）
+- 另一半是 `apps/`：承载 agent 会话的终端 App（ghostty、cmux）的配置 + 部署脚本，**人工维护、不由发布脚本生成**
+  （2026-11-16 从原 `dotfiles` 仓库迁入，理由：这两个终端是 agent 的运行载体，终端配错所有 agent 一起错）
+- 镜像那一半**只做发布**：任何改动的源头都在全局，不要去镜像里改内容（改了也会被下一次发布覆盖）；
+  `apps/` 正好相反，直接在这个仓库里改
 
 ## 二、为什么是「单 pusher」
 
@@ -21,10 +24,14 @@
 互相 rebase，纯属浪费；更糟的是 macbook 与 macmini 的 `~/.pi/agent` 有若干「各机自维护」的配置，
 两边同时生成还可能把对端的本机配置推上公网。
 
-所以约定：**只有 macmini 持有这个仓库并推送**。
+所以约定：**`pi/agent/` 的镜像只由 macmini 生成并推送**。
 
-- macmini：`~/Developer/agents-infra`（唯一 git clone，唯一 pusher）
-- macbook：**不保留**这个仓库（要看内容 `gh repo view` / 网页即可；本机的 `~/.pi/agent` 就是同一份内容）
+- macmini：`~/Developer/agents-infra`（负责 `pi/agent/` 发布的那份 clone）
+- macbook：也保留一份 clone（`~/Developer/agents-infra`）——**`apps/` 需要本地文件**：
+  `~/.config/{ghostty,cmux}` 的软链指向 `~/Developer/agents-infra/apps/...`。它不发布 `pi/agent/`，
+  只用于改 `apps/` 与读镜像；发布脚本按 hostname 拒绝在本机跑。
+- 两边是同一个仓库的两份 clone：**同一时间只在一台机器上做 git 写操作**（先 `git pull --ff-only` 再改）。
+  `publish.py` 只 rsync `pi/agent/`、不碰 `apps/`，所以两边各管一半、不会互相覆盖。
 - 需要在新机器上重建发布能力：macmini 上 `git clone` + 配好 `gh` 认证即可，脚本不需要改
 
 ## 三、发不发布、怎么发
@@ -61,7 +68,9 @@ python3 ~/.pi/agent/patch/agents-infra-publish/publish.py --dry-run  # 看会改
 | `extensions/` | `pi/agent/extensions/` | 工具强制类扩展 |
 | `npm/`（清单） | `pi/agent/npm/` | `package.json` / `package-lock.json` + `PACKAGES.md`（`patch/npm-manifest/refresh.py` 生成） |
 
-**只有一个子树**：`pi/agent/`。pi-alt-team（`~/.pi-alt/`）是私有团队，规则与配置**不进 agents-infra**，只走 Syncthing `pi-alt` 文件夹双机同步。
+**镜像只有这一个子树**：`pi/agent/`。pi-alt-team（`~/.pi-alt/`）是私有团队，规则与配置**不进 agents-infra**，只走 Syncthing `pi-alt` 文件夹双机同步。
+
+仓库根的 `apps/` 不在镜像范围：它不来自全局目录、`publish.py` 也不写它（只 rsync `pi/agent/` 并清理该目录下的孤儿条目）。改 App 配置的规则见 `apps/README_cn.md`——配置实体只存一份、软链到系统位置、`mappings.conf` 是唯一登记处。
 
 **不进镜像**：
 
