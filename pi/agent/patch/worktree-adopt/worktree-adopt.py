@@ -262,6 +262,12 @@ def finalize(root: Path, ref: str) -> int:
     if git(root, "rev-parse", "--verify", "--quiet", ref).returncode != 0:
         return die(f"找不到 {ref}（先 git fetch origin）")
 
+    # 前置：ref 必须是 HEAD 的后代（能 ff）——避免「删完工作区改动才发现不能快进」
+    if git(root, "merge-base", "--is-ancestor", "HEAD", ref).returncode != 0:
+        return die(
+            f"{ref} 不是当前 HEAD 的后代（不能快进）——先处理分叉再收尾，工作区不动"
+        )
+
     items = parse_status(root)
     if not items:
         merged = git(root, "merge", "--ff-only", ref)
