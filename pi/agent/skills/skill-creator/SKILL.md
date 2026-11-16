@@ -241,14 +241,16 @@ Put each with_skill version before its baseline counterpart.
 
 4. **Launch the viewer** with both qualitative outputs and quantitative data:
    ```bash
-   nohup python <skill-creator-path>/eval-viewer/generate_review.py \
-     <workspace>/iteration-N \
-     --skill-name "my-skill" \
-     --benchmark <workspace>/iteration-N/benchmark.json \
-     > /dev/null 2>&1 &
-   VIEWER_PID=$!
+   # 后台进程一律跑在 tmux 里（2026-11-16 全局规则）：窗口 / 终端挂掉 viewer 也不丢
+   tmux kill-session -t =pi-skill-viewer 2>/dev/null || true
+   tmux new-session -d -s pi-skill-viewer \
+     "python <skill-creator-path>/eval-viewer/generate_review.py \
+       <workspace>/iteration-N \
+       --skill-name 'my-skill' \
+       --benchmark <workspace>/iteration-N/benchmark.json"
    ```
    For iteration 2+, also pass `--previous-workspace <workspace>/iteration-<N-1>`.
+   Viewer 的输出 / 报错：`tmux attach -t pi-skill-viewer`（或直接看它打出的 URL）。
 
    **Cowork / headless environments:** If `webbrowser.open()` is not available or the environment has no display, use `--static <output_path>` to write a standalone HTML file instead of starting a server. Feedback will be downloaded as a `feedback.json` file when the user clicks "Submit All Reviews". After download, copy `feedback.json` into the workspace directory for the next iteration to pick up.
 
@@ -290,7 +292,7 @@ Empty feedback means the user thought it was fine. Focus your improvements on th
 Kill the viewer server when you're done with it:
 
 ```bash
-kill $VIEWER_PID 2>/dev/null
+tmux kill-session -t =pi-skill-viewer 2>/dev/null || true
 ```
 
 ---
