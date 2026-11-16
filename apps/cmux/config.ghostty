@@ -4,8 +4,8 @@
 # （Issue #70 把两个应用的配置彻底解耦），终端外观必须在这里重新声明一遍，
 # 否则全部落回 Ghostty 的内置默认——方块光标、主题自带的光标色、默认字体。
 #
-# 本文件由 agents-infra 仓库托管（~/Developer/agents-infra/apps/cmux/config.ghostty），
-# 通过 install.sh 软链到 ~/.config/cmux/config.ghostty。
+# 权威源就是 ~/.config/cmux/config.ghostty（本文件）；agents-infra 的 apps/cmux/config.ghostty
+# 是它的镜像，改完跑 apps/publish.sh 收集进仓库。
 # 改完执行 `cmux reload-config` 生效（终端原地刷新，不用重启 App）。
 
 # 主题：GitHub Dark Default（与 Ghostty 那边保持一致）

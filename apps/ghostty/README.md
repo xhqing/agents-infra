@@ -2,9 +2,12 @@
 
 ## 这个目录里有什么
 
-| 文件 | 系统位置 | 谁在读 |
+| 文件 | 系统位置（权威源） | 谁在读 |
 |---|---|---|
 | `config` | `~/.config/ghostty/config` | **只有 Ghostty 读**（cmux 自 v0.65.2.2-r21 起已解耦，见下） |
+
+本目录里的 `config` 是那份生效文件的**镜像**：改设置请改 `~/.config/ghostty/config`，改完在
+`apps/` 里跑 `./publish.sh` 收集回来；新机器则用 `./install.sh` 部署过去。
 
 ## ⚠️ 只有 Ghostty 读这份配置；cmux 已解耦
 

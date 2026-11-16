@@ -2,7 +2,10 @@
 
 ## 这个目录里有什么
 
-| 文件 | 系统位置 | 来源 / 特点 |
+本目录里除 `README.md` 外都是**镜像**：权威源是家目录里生效的那几个文件，改完跑
+`../publish.sh` 收集回来，新机器用 `../install.sh` 部署过去。
+
+| 文件 | 系统位置（权威源） | 来源 / 特点 |
 |---|---|---|
 | `cmux.json` | `~/.config/cmux/cmux.json` | cmux 的**应用层设置**（外观、浏览器行为、侧边栏、快捷键、通知钩子、actions）。设置界面读它、也会写回它，是这一层的权威源。首次启动时 cmux 会自己生成一份全注释模板，我们的版本就是在这份模板上改的 |
 | `config.ghostty` | `~/.config/cmux/config.ghostty` | cmux **自己的终端配置**（字体、字号、主题、光标、shell integration 等）。用的是 Ghostty 的配置语法，但只有 cmux 读它。v0.65.2.2-r21 起 cmux 不再读 `~/.config/ghostty/config`，终端外观只认这份文件 |
@@ -25,7 +28,7 @@
   （`window-width` / `window-height` / `window-position-*`）与 `keybind` 只对 Ghostty 有意义，
   cmux 那份不重复。
 - 改完 cmux 那份执行 `cmux reload-config` 生效（终端原地刷新，不用重启 App）；
-  `./check.sh` 能查出软链是否还在。
+  `./check.sh` 能查出是否忘了收集。
 
 ## ⚠️ 一条已知的 cmux 行为（会影响中文观感）
 
