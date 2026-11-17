@@ -208,7 +208,7 @@ commit message、PR title / body、Issue 文本都是**公开文本**——commi
    - **触发 / 前置**：项目根有 `VERSION` 文件 + 有 `origin` 指向 `github.com` + `gh` 已认证（`gh auth status`）+ 第 8 步 push 成功。任一不满足 → 跳过、不记录（如「无 `VERSION` / 无 GitHub remote / push 未成功，跳过版本滞后检测」）。
    - **检测逻辑**：
      1. 读 `VERSION` 取基准版本号（trim 首尾空白 / 换行），如 `2.1.0`。
-     2. 查该版本**是否已在 GitHub Release 发布**：先 `gh release view "v<版本>"`（仓库惯用 `v` 前缀 tag）；提示 not found 则再试不带 `v` 的 `gh release view "<版本>"`。任一能查到 → 该版本已发布；都查不到 → **未发布，版本未滞后**（`VERSION` 指向尚未发布的下一版），正常通过。
+     2. 查该版本**是否已在 GitHub Release 发布**：先 `gh release view "v<版本>" -R <origin 的 owner/repo>`（仓库惯用 `v` 前缀 tag）；提示 not found 则再试不带 `v` 的 `gh release view "<版本>" -R <owner>/<repo>`。任一能查到 → 该版本已发布；都查不到 → **未发布，版本未滞后**（`VERSION` 指向尚未发布的下一版），正常通过。**必须显式带 `-R`**：仓库同时有 `origin` 与 `upstream` 两个 remote 时（如 cmux：origin=xhqing/cmux、upstream=manaflow-ai/cmux），gh 不按 origin 认，实测会把本仓库解析成上游——查上游的 Release 必然 not found，把本仓库已发布且有产物的版本误判成未发布（2026-11-17 实测）。
      3. 该版本已发布 → 查仓库里**该版本 tag 之后是否有新提交**：先确保本地有该 tag（`git -C <目标工作区> fetch --tags`，浅克隆 / 未 fetch 标签时必要），再 `git -C <目标工作区> rev-list --count <实际tag>..HEAD`，结果 > 0 → 有新提交；结果 = 0 → 该版本发布后无改动，正常通过。
      4. 两者同时满足 → **代码有前进**：按上条分流报告——含 fix / feat 类改动 → 报「版本滞后 N 个待发布提交」（当前 VERSION / 最新已发布版本 / 待发布提交数），由第 10 步自动衔接发版链（2026-10-02 起）；均为非功能类 → 报「非功能类新提交 N 个，不发版、无需处理」（2026-10-13 起）。**本步不改文件、不就地 bump。**
    - **不写缓存标记**：版本滞后状态随每次提交 / 每次发版动态变化，**每次 `/commit` 都要重新查**，故 `.commit-cache.md`**不写 `version-staleness` 标记**、永不跳过本步。
@@ -294,7 +294,7 @@ commit message、PR title / body、Issue 文本都是**公开文本**——commi
         - **语义层（机械层无命中时才做）**：读新提交的 message 与改动范围（`git -C <目标工作区> log --no-merges --format='%s%n%b' <tag>..HEAD`，必要时 `git -C <目标工作区> diff <tag>..HEAD --stat`），判读是否属「核心功能的修复 / 新增」——明确是 → 命中；纯文档 / 杂事 / 配置 / 版本号 / 缓存 / 格式化 / 规则梳理类 → 不命中；**拿不准 → 按不命中处理**（宁可少发；需要时手动 `/bump` / `/release`）。设语义层的原因：部分仓库（如 blog / vscode-copy-anywhere）的提交信息不带 conventional 前缀，只靠机械层会漏掉真实的修复 / 新增。
         - **豁免（发版链内部延续，防死锁）**：若本次 `/commit` 本身就是发版链的产物（用户手动 `/bump` 或本步自动触发的 bump 链条走到 `/add` → `/commit`），发版意图已由用户 / 链条确立——跳过本判定、直接继续第 3 步（否则 bump 提交本身不含 fix / feat，链条无法收尾）。
         - **范围口径「自最新 tag 以来」**：发版打包的就是自上一 tag 以来的全部提交——其中只要有一条功能类改动，本次发版就有实质内容；全是非功能类就没有发版理由；纯文档推进期间版本号停在已发布值属正常，不是「滞后」问题（9j 同口径）。
-     3. **版本就绪检查**（决定走哪条自动路径）：① `VERSION` **尚未发布**——`gh release view "v<版本>"` / `gh release view "<版本>"` 均查不到（版本取值同 9j：读 `VERSION` 文件 trim）；② **CHANGELOG 最新实际版本标题与 `VERSION` 一致**（口径同 9k：剥离前缀后核心 major.minor.patch 相同）。
+     3. **版本就绪检查**（决定走哪条自动路径）：① `VERSION` **尚未发布**——`gh release view "v<版本>" -R <origin 的 owner/repo>` / `gh release view "<版本>" -R <owner>/<repo>` 均查不到（版本取值同 9j：读 `VERSION` 文件 trim；**双 remote 仓库必须带 `-R` 钉住 origin**——gh 会解析到 `upstream` 上游，把已发布版本判成未发布）；② **CHANGELOG 最新实际版本标题与 `VERSION` 一致**（口径同 9k：剥离前缀后核心 major.minor.patch 相同）。
         - ①②都满足 → **就绪** → 走「就绪路径」（直接 `/release`）；
         - `VERSION` **已发布**（即 9j 的「版本滞后」）或 CHANGELOG 与 `VERSION` 不一致 → **未就绪** → 走「未就绪路径」（自动 bump 链条）。
    - **就绪路径（直接发版）**：直接进入 `/release` skill 完整流程（正式发布通道：在主工作区对齐 main → 版本就绪校验 → tag 已存在检查 → CHANGELOG notes → annotated tag → push tag → `gh release create` → 校验 → 清理本地产物，worktree 场景的对齐与打 tag 都在主工作区用 `-C` 执行，见 release skill 第 0 步），一步不省；release 内安全阀照常暂停询问。发版完成后继续第 11 步收尾（`git status` 反映发版后的最终状态）；发版未完成（用户取消 / 安全阀暂停未决）→ 如实报告后进第 11 步。
