@@ -40,7 +40,8 @@
  */
 
 import { execFileSync, execSync } from "node:child_process";
-import { basename } from "node:path";
+import { realpathSync } from "node:fs";
+import { basename, resolve } from "node:path";
 import { isToolCallEventType, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Box, Spacer, Text } from "pi-tui";
 
@@ -84,27 +85,42 @@ function runGitStatus(cwd: string): string | null {
 }
 
 /**
+ * 目录规范化：展开 `~`、解析 `.` / `..` / 尾斜杠、按软链接取真实路径，最后收敛到仓库根。
+ * 为什么（2026-11-17 修复）：以前只做字符串拼接，`git -C <仓库>/.` 与 `<仓库>` 会算成
+ * 两个不同目录，收尾总结把同一个仓库报成两个、其中一条标签还是 `.`。同一仓库的任何
+ * 写法（`/.`、子目录、软链接）都应落到同一个仓库根，才谈得上去重。
+ */
+function canonicalTarget(raw: string, cwd: string): string {
+	let p = raw.trim().replace(/^["']|["']$/g, "");
+	if (p === "~" || p.startsWith("~/")) p = (process.env.HOME ?? "~") + p.slice(1);
+	const joined = p.startsWith("/") ? p : `${cwd.replace(/\/+$/, "")}/${p}`;
+	let abs: string;
+	try {
+		abs = realpathSync(joined);
+	} catch {
+		abs = resolve(joined); // 目录还不存在 / 不可解时只用文本规范化
+	}
+	// 仓库内子目录也收敛到仓库根；不是仓库时保留原路径
+	return gitOut(abs, ["rev-parse", "--show-toplevel"]) || abs;
+}
+
+/**
  * 从命令里取所有 git 目标目录（按出现顺序，最后一个即最近）：`git -C <path>` 与 `cd <path>` 都算。
  * 背景：会话 cwd 常在 main 主工作区、实际提交在 worktree 里；一次 run 也可能动多个仓库
  * （2026-11-09 一次改名动了 15 个仓库），所以收尾要把这些目标逐个实测。
+ * 同一仓库的多种写法（`/.`、子目录、软链接）经 canonicalTarget 归一后去重。
  */
 function commandTargets(command: string, cwd: string): string[] {
-	const toAbs = (raw: string): string => {
-		let p = raw.trim().replace(/^["']|["']$/g, "");
-		if (p === "~" || p.startsWith("~/")) p = (process.env.HOME ?? "~") + p.slice(1);
-		if (p.startsWith("/")) return p;
-		return `${cwd.replace(/\/+$/, "")}/${p}`;
-	};
 	const out: string[] = [];
 	for (const raw of command.split(SEGMENT_SPLIT)) {
 		const seg = raw.trim();
 		if (!seg) continue;
 		const cd = /^cd\s+(.+)$/.exec(seg);
-		if (cd) out.push(toAbs(cd[1].split(/\s+/)[0]));
+		if (cd) out.push(canonicalTarget(cd[1].split(/\s+/)[0], cwd));
 		if (/^git\b/.test(seg)) {
 			const re = /\s-C\s*("[^"]*"|'[^']*'|\S+)/g;
 			let hit: RegExpExecArray | null;
-			while ((hit = re.exec(seg)) !== null) out.push(toAbs(hit[1]));
+			while ((hit = re.exec(seg)) !== null) out.push(canonicalTarget(hit[1], cwd));
 		}
 	}
 	return out;
