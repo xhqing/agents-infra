@@ -39,6 +39,7 @@ commit message、PR title / body、Issue 文本都是**公开文本**——commi
 - **全部 git 命令带 `-C <目标工作区绝对路径>`，禁止 `cd`**：`git-main-guard.ts` 不跟踪 `cd`（只认 `-C` 与进程 cwd），`cd <worktree> && git commit` 会被误判成「在 main 上提交」而拦下；反过来，漏写 `-C` 的 `git status` / `git diff --cached` 读的是主工作区——worktree 的工作区与 index 与主仓库完全独立（实测互不可见），会得出「暂存区无内容」的错误结论并静默结束流程。
 - **worktree 里不能操作本地 main**（实测三条命令全部 fatal）：`git switch main` → `already used by worktree at <主工作区>`；`git fetch origin main:main` → `refusing to fetch into branch`；`git branch -f main origin/main` → `cannot force update the branch used by worktree`。所以本地 main 的一切对齐动作都改到主工作区执行（0a / 9z 的 worktree 变体）。
 - **`gh` 命令不受此限**：gh 没有 `-C` 选项，用 `cd <任务工作区> && gh ...` 或带 `-R <owner/repo>` 即可（`git-main-guard` 只匹配 `git` 命令段）。
+- **worktree 里 `gh pr merge` 不要带 `--delete-branch`（2026-11-17 实测）**：gh 会尝试切回 base 分支做本地分支删除，而 main 被主工作区占用 → 整条命令直接失败（`fatal: 'main' is already used by worktree at <主工作区>`），auto-merge 根本没启用，PR 白等。正确写法 `gh pr merge <分支名> --squash --auto`；远端源分支由 9z 核验清理（仓库开了 `delete_branch_on_merge` 时 GitHub 自动删）。同理，`--auto` 下不要再追加任何需要切分支的选项。
 
 ## 执行流程
 
