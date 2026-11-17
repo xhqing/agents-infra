@@ -99,6 +99,7 @@
 | dev-agent（Atlas） | pi-harness | Pi agent harness 独立分叉仓库（TypeScript monorepo：coding agent CLI / agent 运行时 / 统一多供应商 LLM API / TUI 组件库），2026-09-19 起与原上游 earendil-works/pi 断开 fork 关系，自主维护演进；GitHub 仓库与本地目录均为 `pi-harness`（2026-10-18 改名、2026-10-23 本地目录同步改名） |
 | dev-agent（Atlas） | ghostty | Ghostty 终端的独立分叉仓库（2026-09-20 起与原上游 ghostty-org/ghostty 断开 fork 关系、自主演进；当前为 v1.3.1 基线 + 「Cmd+V 粘贴剪贴板图片为临时文件路径」补丁，GitHub Actions 云构建） |
 | dev-agent（Atlas） | cmux | cmux 终端（基于 Ghostty 内核的 macOS 终端，面向 AI coding agents）的**自建分叉仓库**（`github.com/xhqing/cmux`，fork 自 manaflow-ai/cmux，2026-10-31 建立、由 Atlas 负责）：不等上游把关闭确认类改动合并，按我们自己的偏好改（关闭带运行进程的工作区 / 标签页不再强制确认），以「上游 release tag 为基线 + 最小补丁」的方式持续同步上游 |
+| dev-agent（Atlas） | android-cmux | cmux 的 **Android 客户端**（`github.com/xhqing/android-cmux`，2026-11-17 建立、由 Atlas 负责）：在 Android 手机上连接 macOS 上的 cmux，看终端与编码 agent 会话、必要时接管输入（终端用 host 侧算好的 `render-grid` 画格子，不在端上重造 VT 解析器）。与 cmux 仓库**代码解耦**——cmux 是 GPL-3.0-or-later，本项目只按线上协议独立实现 Kotlin 侧、保持 MIT；协议参照 cmux 的 `Packages/iOS/CmuxMobile*` 与 `Packages/Shared/CMUXMobileCore`，传输用 `iroh-ffi` 的 Kotlin 绑定 |
 | dev-agent（Atlas） | turn-diff | 看「这一轮 AI 改了什么」的 pi 扩展 + 命令行：每轮记 git 基线、轮次结束算增量并落盘，`/turn-diff` 与 `turn-diff` 随时读（项目 `~/Developer/turn-diff`；2026-11-07 由 diff-view 更名并把范围收敛为「只做本轮 diff」，cmux 面板能力已移除） |
 | dev-agent（Atlas） | mp4-player | VSCode 视频播放扩展（上游 Brodazz/mp4-player 的独立仓库：编辑器标签页内带音频播放视频，内置 ffmpeg WebAssembly 做音频解码与格式转码；2026-10-09 移交 Atlas，开发目录 ~/Developer/mp4-player） |
 | assistant-agent（Kit） | xhqing | 用户 GitHub 个人主页仓库 |
