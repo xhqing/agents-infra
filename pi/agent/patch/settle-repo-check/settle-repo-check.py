@@ -164,8 +164,43 @@ def dirty_repos(agent, rows):
     return out
 
 
+# 非核心功能的提交 scope：不触发发版（对齐 2026-10-13 门禁「只有 fix / feat 核心功能
+# 的修复与新增核心功能才发版」）。`fix(tests)` / `perf(ci)` 这类改的是测试与流水线，
+# 用户装到的 app 一字未变——2026-11-17 cmux 的 3 个测试 / CI 提交就这样被当成待发版。
+NON_CORE_SCOPES = {"ci", "test", "tests", "docs", "chore"}
+
+
+def _repo_slug(d):
+    """从 origin remote 反解 owner/repo，供 gh 的 `-R` 用。
+
+    为什么不靠 gh 自己解析（2026-11-17）：仓库同时有 origin 与 upstream 两个 remote 时
+    （cmux 即如此：origin=xhqing/cmux、upstream=manaflow-ai/cmux），gh 不按 origin 认，
+    实测把本仓库解析成上游 manaflow-ai/cmux——于是 `gh release view v0.65.2.2-r25`
+    去上游查、得到 not found，把**已经发布且有产物**的 r25 报成「未发布」。
+    显式钉住 origin 才是本仓库自己的发版状态。
+    """
+    code, url, _ = _sh(["git", "-C", d, "config", "--get", "remote.origin.url"])
+    if code != 0 or not url:
+        return ""
+    m = re.search(r"github\.com[:/]+([^/]+)/(.+?)(?:\.git)?$", url.strip())
+    return f"{m.group(1)}/{m.group(2)}" if m else ""
+
+
+def _has_core_change(subjects):
+    """提交主题里是否有核心功能类 fix / feat（scope 属测试 / CI / 文档的不算）。"""
+    for s in subjects:
+        m = re.match(r"^(fix|feat)(?:\(([^)]*)\))?[!:]", s, re.I)
+        if not m:
+            continue
+        scope = (m.group(2) or "").strip().lower()
+        if scope in NON_CORE_SCOPES:
+            continue
+        return True
+    return False
+
+
 def unpublished_repos(agent, rows):
-    """自最新 tag 有 fix/feat 提交、但 VERSION 对应的 GitHub Release 不存在 → 漏发版。
+    """自最新 tag 有核心功能类提交、但 VERSION 对应的 GitHub Release 不存在 → 漏发版。
 
     为什么加（2026-11-08）：发版自动衔接只挂在 /commit 流程末尾；走 PR + auto-merge
     的链路没有任何环节回头做这个检查——turn-diff 当天 23 个提交、7 个版本静默积压。
@@ -188,18 +223,29 @@ def unpublished_repos(agent, rows):
         if code != 0:
             continue
         subjects = [s for s in log.splitlines() if s.strip()]
-        if not subjects or not any(re.match(r"^(fix|feat)(\(|!|:)", s, re.I) for s in subjects):
-            continue  # 自上个版本起没有功能类改动 → 按 2026-10-13 门禁不触发发版
+        if not subjects or not _has_core_change(subjects):
+            continue  # 自上个版本起没有核心功能类改动 → 按 2026-10-13 门禁不触发发版
         try:
             version = open(ver_file, encoding="utf-8").read().strip().lstrip("vV")
         except OSError:
             continue
         if not version:
             continue
-        code, _, err = _sh(["gh", "release", "view", f"v{version}", "--json", "tagName"], cwd=d)
-        if code == 0:
+        args = ["gh", "release", "view", "--json", "tagName"]
+        slug = _repo_slug(d)
+        if slug:
+            args += ["-R", slug]  # 钉住本仓库：双 remote 时 gh 会解析到上游
+        published, looked_up = False, False
+        for tag_name in (f"v{version}", version):  # 仓库惯用 v 前缀，也试不带前缀的
+            code, _, err = _sh(args + [tag_name], cwd=d)
+            if code == 0:
+                published = True
+                break
+            if "not found" in err.lower():
+                looked_up = True  # 真的查过了、只是没有这个 Release
+        if published:
             continue  # 该版本已发布
-        if "not found" not in err.lower():
+        if not looked_up:
             continue  # 查询失败 / 未认证 → 不误报
         out.append({"repo": proj, "version": version, "commits": len(subjects), "path": d})
     return out
