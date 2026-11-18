@@ -1,0 +1,26 @@
+#!/bin/sh
+# open-computer-use MCP 启动器（全局入口）
+#
+# 为什么需要这个脚本：`~/.pi/agent` 由 MacBook 与 macmini 共用（Syncthing 双向同步），
+# 但两台机器的 node 与全局包路径不同（本机 /opt/homebrew/bin，macmini ~/.local/node/bin）。
+# mcp-adapter.json 里没法写死绝对路径，所以由本脚本按顺序探测，交给同一份配置在两台机器都能跑。
+#
+# 规则见全局 AGENTS.md「电脑操作（computer-use）」节：
+#   本机（用户正在用的 MacBook）使用必须先取得用户当次授权，由 extensions/computer-use-guard.ts 硬拦截；
+#   macmini（专用自动化机）直接可用，无需授权。
+
+for d in "$HOME/.local/node/bin" /opt/homebrew/bin /usr/local/bin "$HOME/.npm-global/bin"; do
+	if [ -x "$d/open-computer-use" ]; then
+		exec "$d/open-computer-use" "$@"
+	fi
+done
+
+# 没装全局包时退回 npx，固定版本避免行为漂移（与 AGENTS.md 里的版本引用保持一致）
+for n in "$HOME/.local/node/bin/npx" /opt/homebrew/bin/npx /usr/local/bin/npx; do
+	if [ -x "$n" ]; then
+		exec "$n" -y @qwen-code/open-computer-use@0.2.3 "$@"
+	fi
+done
+
+echo "open-computer-use 未找到：先安装 npm i -g @qwen-code/open-computer-use@0.2.3" >&2
+exit 127
