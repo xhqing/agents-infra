@@ -25,7 +25,6 @@
 | **Hopkins** | apply-agent | 投递转化率优化师 | 工作接单全链路（专门负责：找单找岗、投递、转化一条龙，原由 Kit 承接）——任务池投标与招聘平台求职（电鸭、BOSS直聘等）同为并行接单策略、同属一条投递漏斗：投递材料工程（接单的标书 + 求职的简历与打招呼话术，模板库 + 单变量 A/B 测试）、漏斗追踪（投递 → 回应 → 沟通 / 面试 → 成单 / offer）、转化率归因、报价与薪资策略测试、渠道淘汰（多渠道数据触发不凭感觉）；名字取自「科学广告之父」Claude Hopkins（简历即自我广告、话术即文案、漏斗归因即本行），直属用户、不属任何小组（工作接单，单人）；项目原名 BidOptimizerAgent |
 | **Justin** | LegalAgent | 法务Agent | 法务：负责整个团队所有跟合同和收款相关的事项——合同起草审查、收款结构设计（分期付款）、交易对手尽调、证据链留存、纠纷应对、合规备忘；名字取自编纂《民法大全》的查士丁尼大帝，直属用户、不属任何小组（纯法务，跨组服务全部小组；财务职能暂时空缺） |
 | **Gatsby** | social-agent | 社媒运营官 | 社媒矩阵：运营群主本人的社媒账号矩阵——YouTube（横向长视频 + 纵向中短视频）/ 小红书（图文 + 纵向中短视频）/ 公众号 / 小绿书（公众号贴图）/ 视频号（纵向中短视频）/ 微信社群 / 个人微信朋友圈；社群的运营理念与方法（群规迭代、新人欢迎流程、话题日历、内容整理、运营复盘）由 Gatsby 主导产出，群主为辅助、引导和执行角色（微信内一切操作由群主落地）；名字取自《了不起的盖茨比》的传奇派对主人 Jay Gatsby，不分组、直属用户（2026-10-14 由「社群运营官」升级为「社媒运营官」；项目名 2026-10-15 由 CommunityManagerAgent 更名为 social-agent） |
-| **cuAgent** | cuAgent | 电脑操作员 | 计算机操作用户代理：用 computer-use 能力（GUI 自动化——看屏幕 / 点击 / 输入 / 拖拽）代替用户操作本机电脑界面；独立工具型 agent、不分组、直属用户，独立于销售流水线；能力仅限本项目内启用（2026-10-09 建立，远程仓库待建） |
 
 ## Agent 项目的判定与命名标准（2026-11-09 用户立，同日两次修订定稿）
 
@@ -42,7 +41,7 @@
 
 ## 销售流水线与三小组
 
-销售流水线顺序：① Scout → ② Wright → ③ Mason → ④ Buzz → ⑤ Vendy → ⑥ Echo。整个团队按涉及领域分为三个小组：**数字产品销售小组**（六段流水线 Scout → Wright → Mason → Buzz → Vendy → Echo）、**投资与交易小组**（Mark 量化策略研发与回测标定，Victor 日内盯盘发信号）、**基础设施小组**（Anvil 纯服务端项目；Atlas 横跨前后端的完整项目及偏前端 / TUI / 客户端侧的工作，并负责其名下子项目的测试与回归防护网——Anvil 与 Atlas 分工协作；Ada 负责全团队推理引擎的设计与评测，为所有 agent 的思考能力供底）。**Kit（总经理助理）不分组、不属于任何小组**——用户的第一助理、团队多面手，几乎任何事务都接得住（工作接单整体归 Hopkins、合同收款归 Justin）。**Gatsby（社媒运营官，2026-10-14 由「社群运营官」升级）同样不分组、直属用户**——运营群主本人的社媒账号矩阵（YouTube / 小红书 / 公众号 / 小绿书 / 视频号 / 微信社群 / 个人微信朋友圈），理念方法由 Gatsby 出、执行由群主落地（微信内一切操作）；与 Buzz 的分工：Buzz 负责数字产品销售的渠道引流内容（X / IG / YouTube / 小红书 / 知乎 / B 站），Gatsby 负责群主本人账号的长期运营与私域阵地——平台有重叠、任务不同。**cuAgent（电脑操作员）不分组、直属用户**——computer-use 专用 agent：用 GUI 自动化代替用户操作本机电脑界面（看屏幕 / 点击 / 输入 / 拖拽），独立于销售流水线，能力仅限自己项目内启用。其中 Mason（建设期：建成交阵地 + 接支付）必须在 Buzz 之前就位，Buzz 的带货链接才有处可指；Vendy 在 Buzz 之后做运营期（接单 / 履约 / 售后 / 对账）——Mason 建、Vendy 营，接力同一阵地。每个 agent 的名称同时写在其项目 README 里。
+销售流水线顺序：① Scout → ② Wright → ③ Mason → ④ Buzz → ⑤ Vendy → ⑥ Echo。整个团队按涉及领域分为三个小组：**数字产品销售小组**（六段流水线 Scout → Wright → Mason → Buzz → Vendy → Echo）、**投资与交易小组**（Mark 量化策略研发与回测标定，Victor 日内盯盘发信号）、**基础设施小组**（Anvil 纯服务端项目；Atlas 横跨前后端的完整项目及偏前端 / TUI / 客户端侧的工作，并负责其名下子项目的测试与回归防护网——Anvil 与 Atlas 分工协作；Ada 负责全团队推理引擎的设计与评测，为所有 agent 的思考能力供底）。**Kit（总经理助理）不分组、不属于任何小组**——用户的第一助理、团队多面手，几乎任何事务都接得住（工作接单整体归 Hopkins、合同收款归 Justin）。**Gatsby（社媒运营官，2026-10-14 由「社群运营官」升级）同样不分组、直属用户**——运营群主本人的社媒账号矩阵（YouTube / 小红书 / 公众号 / 小绿书 / 视频号 / 微信社群 / 个人微信朋友圈），理念方法由 Gatsby 出、执行由群主落地（微信内一切操作）；与 Buzz 的分工：Buzz 负责数字产品销售的渠道引流内容（X / IG / YouTube / 小红书 / 知乎 / B 站），Gatsby 负责群主本人账号的长期运营与私域阵地——平台有重叠、任务不同。其中 Mason（建设期：建成交阵地 + 接支付）必须在 Buzz 之前就位，Buzz 的带货链接才有处可指；Vendy 在 Buzz 之后做运营期（接单 / 履约 / 售后 / 对账）——Mason 建、Vendy 营，接力同一阵地。每个 agent 的名称同时写在其项目 README 里。
 
 ## 新建 Agent 时自动维护注册表（免确认）
 
@@ -117,6 +116,7 @@
 > **Mark（quant-agent）名下的仓库构成（2026-11-12）**：原 Intraday / Swing / gridtrader 三个子项目仓库已并入 Mark 仓库，成为 `Intraday/`、`Swing/`、`gridtrader/` 三个目录（各自带自己的 `AGENTS.md`；并入按 squash 落地成单个提交，**原仓库的完整提交历史保留在三个 GitHub 存档仓库里**）；另有私有子项目 **NewsScoreStudy**（独立 private 仓库，只列名与链接，不介绍内容）。
 
 - **已注销 / 已退役的 Agent**：**Hermes**（NetOpsAgent，2026-10-26 用户决定）——原网络运维管理员，唯一子项目 XPilot 已移交 Atlas（dev-agent），项目本体退役、不再作为活跃 Agent 维护（GitHub 仓库 `xhqing/NetOpsAgent` 保留为存档；本地目录已于 2026-10-31 按用户要求删除）。
+- **已除名的 Agent（2026-11-18 用户决定）**：**cuAgent**（cuAgent，电脑操作员）——用户要求「取消 cuAgent 这个智能体，从名单中撤销」，同时把 **computer-use 能力装进 pi 全局**（`~/.pi/agent/mcp-adapter.json` 的 `open-computer-use` + `extensions/computer-use-guard.ts`）。职责移交方式：**能力上收到全局层**——任何 agent 都能用，规则改为「**本机使用需用户当次授权、macmini 直接可用**」（2026-11-18 用户立，详见全局 `AGENTS.md` 的「电脑操作（computer-use）」节）。项目本体退役、不再作为活跃 Agent 维护，GitHub 仓库 `xhqing/cuAgent` 保留为存档；原项目级 `.mcp.json` 与 `.pi/extensions/computer-use-guard.ts` 由项目自行清理。
 - **已除名的 Agent（2026-10-31 用户决定，第二批）**：**Tinker**（PatchClaudeAgent，补丁维护匠）——用户要求「Tinker 这个 Agent 也除名，不需要了」；原职责是把自定义补丁重新应用到升级后的 VSCode Claude Code 扩展（自愈引擎），本次未指定接替者；项目本体退役、不再作为活跃 Agent 维护；**本地目录已按用户 2026-10-31 要求删除**（`~/Developer/PatchClaudeAgent` 不再存在），GitHub 仓库 `xhqing/PatchClaudeAgent` 保留最新版为唯一源。
 - **已除名的 Agent（2026-11-13 用户决定）**：**Hopper**（TestEngineerAgent，软件测试工程师）——用户要求从团队除名。理由：开发工作流已变为「Leader 给 Worker 出题」，由 dev-agent（Atlas）在子项目 worktree 上、实现开工前先写出测试、Worker 全程只读不改，就能达成同样的测试开发分离效果，独立的测试 agent 不再必要；同时明确**只有 dev-agent 名下的子项目需要严格的测试开发分离范式与回归防护网**，其它 agent 的项目不涉及复杂软件开发，不需要这套范式。测试定义权并入 **Atlas**（dev-agent），十条未完成待办已全部交接（8 条核实已完成、2 条转移至其 `TODO.md` 的 T1 / T3）；项目本体退役、不再作为活跃 Agent 维护，GitHub 仓库 `xhqing/TestEngineerAgent` 保留为存档（README / AGENTS.md 已加退役说明，`cases/` 目录已清理，PR #18）。
 - **已除名的 Agent（2026-11-05 用户决定）**：**Prometheus**（CapabilityManagerAgent，通用能力管家）——项目**降级为普通项目并更名 agents-infra**，归 **Kit**（assistant）负责；不再作为 Agent 维护（公告 / 维护逻辑改为 macmini 单向发布脚本，见 `docs/capability-sync.md`）。GitHub 仓库沿革：`xhqing/CapabilityManagerAgent` → 2026-11-05 改名 `xhqing/TeamToolkit` → 2026-11-11 改名 `xhqing/agents-infra`（旧 URL 均由 GitHub 自动重定向）。

@@ -288,7 +288,7 @@ Copyright (c) 2026 xhqing and contributors (xhqing/ghostty fork)
 
 **两个身份完全独立（2026-11-11 用户立；2026-11-15 改为同一 harness 的双身份）**：**pi-team** 负责开源项目，用默认 `pi` 身份，规则在本文件；**pi-alt-team** 负责闭源项目，用 `pi-alt` 身份，规则在 `~/.pi-alt/agent/AGENTS.md`。两者是同一个 harness 的两套配置目录，不共用注册表、名册、镜像、技能、守卫；pi-alt-team 的项目默认不登记进 `docs/agents-registry.md`，也不进 `xhqing` 名册与 `agents-infra` 镜像；**例外**：用户明确要求只列名与链接的私有子项目，按专项指示登记、不介绍内容（当前：NewsScoreStudy）。反过来，pi-team 的项目也不进 pi-alt-team。**同一个 Agent 是“一个人”，只有一套版本 / CHANGELOG；两套配置（`.pi` / `.pi-alt`）与 Leader / Worker 工作流的布局见 `~/.pi/agent/docs/pi-alt-team.md`。**
 
-团队共有 16 个 agent（三个小组 + 直属岗位；2026-10-26 注销 Hermes、2026-10-31 除名 Alfred 与 Tinker、2026-11-05 注销 Prometheus（项目降级为普通项目、归 Kit，2026-11-11 该项目更名为 agents-infra）、2026-11-13 除名 Hopper（测试定义权并入 Atlas / dev-agent，只覆盖其名下子项目）后从 21 减到 16，口径与 `docs/agents-registry.md` 智能体命名注册表的行数一致）。涉及以下场景时**先读对应文档再动手**（权威源在全局 `~/.pi/agent/docs/`，agents-infra 仓库的 `pi/agent/`（docs / skills / patch / AGENTS.md / extensions）为逐字节一致的开源镜像）：
+团队共有 15 个 agent（三个小组 + 直属岗位；2026-10-26 注销 Hermes、2026-10-31 除名 Alfred 与 Tinker、2026-11-05 注销 Prometheus（项目降级为普通项目、归 Kit，2026-11-11 该项目更名为 agents-infra）、2026-11-13 除名 Hopper（测试定义权并入 Atlas / dev-agent，只覆盖其名下子项目）、2026-11-18 取消 cuAgent（computer-use 能力迁入 pi 全局）后从 21 减到 15，口径与 `docs/agents-registry.md` 智能体命名注册表的行数一致）。涉及以下场景时**先读对应文档再动手**（权威源在全局 `~/.pi/agent/docs/`，agents-infra 仓库的 `pi/agent/`（docs / skills / patch / AGENTS.md / extensions）为逐字节一致的开源镜像）：
 
 - **新建 Agent 项目**：先读 `~/.pi/agent/docs/agents-registry.md`（名称查重 + 流水线位置）与 `~/.pi/agent/docs/new-agent-scaffold.md`（命名规则（**Agent 项目一律 `<职责>-agent` 全小写、连字符**，Non-agent 项目按「尽可能简单、体现职责」；项目是不是 Agent 项目看 README 的 `Type` 徽章是否为 `AI Agent`）、脚手架清单、README / logo / 徽章规范、`.gitignore` 必含项、开源到 GitHub 流程、双语 README 同步细则）。新建时向注册表追加新 agent 行**免确认**（仅限追加，不改已有行）。
 - **跨 agent 移交 / 推荐子任务**：读 `~/.pi/agent/docs/agents-registry.md`（注册表：名称、项目、职责、销售流水线、三小组分组）。
@@ -435,19 +435,24 @@ pi 加载扩展时**只要有一个文件解析失败就 `exit(1)`**——打印
 
 ### 本机屏幕焦点禁止抢夺（未经授权禁止；取得当次授权可执行；钩子已硬拦截）
 
-用户的工作 Mac 就是他此刻正在用的机器——**未经授权抢走屏幕焦点的操作会直接打断用户**（窗口置顶 / 激活、菜单展开与点击、模拟按键 / 鼠标、AX 操控窗口位置与尺寸等）。2026-10-14 用户立规，原话：「本机焦点禁止抢夺」「以后也是一样」；立规起因是 AI 为排查 codef 故障在本机反复置顶窗口、开菜单、点平铺项，连续打断用户操作。**2026-10-14 深夜用户澄清口径**：「你可以跑抢焦点的程序，**前提是拿到我的授权**」——本机执行不是被绝对禁止，而是**必须先取得用户当次授权**；cuAgent 是「**需要使用 computer-use 能力**」（看屏幕 / 真实点击拖拽）时的专门通道，跑普通脚本测试用不上它。
+用户的工作 Mac 就是他此刻正在用的机器——**未经授权抢走屏幕焦点的操作会直接打断用户**（窗口置顶 / 激活、菜单展开与点击、模拟按键 / 鼠标、AX 操控窗口位置与尺寸等）。2026-10-14 用户立规，原话：「本机焦点禁止抢夺」「以后也是一样」；立规起因是 AI 为排查 codef 故障在本机反复置顶窗口、开菜单、点平铺项，连续打断用户操作。**2026-10-14 深夜用户澄清口径**：「你可以跑抢焦点的程序，**前提是拿到我的授权**」——本机执行不是被绝对禁止，而是**必须先取得用户当次授权**；需要**看屏幕 / 真实点击拖拽**时用全局 computer-use 能力（见下文「电脑操作（computer-use）」节），跑普通脚本测试用不上它。
 
 - **未授权时被硬拦截**（工具层）：`osascript` 的焦点 / UI 操控（`keystroke`、`key code`、`pick menu`、`click menu item`、`frontmost`、`AXRaise`、`perform action`、设置窗口位置 / 尺寸、`activate`）、**直接调用 `codef`**（它按设计就是置顶窗口 / 开菜单 / 发按键的工具），以及**用 `open` 代开网页页面**（`open http(s)://…`、`open` 本地 `.html` 文件——浏览器 / 预览窗口会被带到前台抢走焦点）。只读查询（读窗口列表、系统日志等）不抢焦点、不受限。
 - **要给用户看的网页，一律把链接原文发给他、让他自己点开，不要用 `open` 代开**（2026-10-14 当晚用户追加立规：AI 在用户正看别的东西时打开了 tokenplus 页面抢走焦点，原话「下次不要帮我打开网页页面，给我链接就行」）。
-- **执行方式（按优先级）**：① **本机执行**——先向用户说明理由与影响、取得**当次**明确授权，命令加标记 `# AI_AUTHORIZED_LOCAL_FOCUS` 后运行（授权不跨次复用）；② 想不打扰用户时——登录 **macmini** 执行（`ssh mac-mini`，GUI 会话已登录，可在其屏幕上自由测试）；③ **需要 computer-use 类 GUI 能力**（看屏幕 / 真实点击拖拽 / 输入）时——找 **cuAgent**（其专属能力，见下节）。
+- **执行方式（按优先级）**：① **本机执行**——先向用户说明理由与影响、取得**当次**明确授权，命令加标记 `# AI_AUTHORIZED_LOCAL_FOCUS` 后运行（授权不跨次复用）；② 想不打扰用户时——登录 **macmini** 执行（`ssh mac-mini`，GUI 会话已登录，可在其屏幕上自由测试）；③ **需要 computer-use 类 GUI 能力**（看屏幕 / 真实点击拖拽 / 输入）时——用**全局 computer-use**：落到本机需当次授权，macmini 直接可用（见下节）。
 - 未获授权不得执行本机抢焦点操作、不得擅自加标记；授权由用户当次明确给出。
 - **授权焦点用完必须归还（2026-11-06 用户立）**：拿到当次授权、执行完抢焦点的操作后，**必须把焦点交还给授权时用户所在的窗口**（通常就是发起授权的那条 pi 会话窗口）——用户要靠「焦点回来了」判断 AI 已经用完；不要停在被操作的应用上。做法：执行前记录当前前台 app（`lsappinfo front` 或等价查询），操作结束（含失败）后用 `osascript -e 'tell application id "<bundle id>" to activate'` 或等价方式切回；切回失败要如实说明「焦点可能仍留在 <app>，请手动切回」。这条只约束「归还」动作，**不构成新的抢焦点授权**——下一次抢焦点仍需重新取得当次授权。
 - 由 pi 端 `~/.pi/agent/extensions/focus-guard.ts` 硬拦截兜底（命令里含 `ssh` 时放行——那是 macmini 等远端机、不是用户本机）。
 
-### 电脑操作（computer-use）：仅限 cuAgent 项目内使用（2026-10-09 修订）
+### 电脑操作（computer-use）：全局能力，本机需授权、macmini 直接可用（2026-11-18 用户立，取代 2026-10-09 的「仅限 cuAgent 项目内使用」）
 
-- 沿革：2026-10-08 用户曾决定彻底弃用 computer-use（原话：「我不想用computer-use能力了，以后也不想用了」），相关组件全部移除（pi 全局 MCP 条目、全局 npm 包、缓存、配套补丁；同日早些时候试点的「用前授权 + 用毕弹窗」机制随之作废）。2026-10-09 用户确认**恢复 computer-use 能力、且限定只有 cuAgent 能用**。
-- **当前口径**：computer-use 只以 cuAgent 项目的**项目级 MCP** 形式存在（cuAgent 仓库根 `.mcp.json`，由 npx 拉起固定版本、不装全局）。**其它任何会话 / 项目不得启用、使用或全局安装 computer-use 类工具**，全局 `~/.pi/agent/mcp-adapter.json` 保持无该条目；确需在 cuAgent 之外使用时，仍须先经用户明确同意。
+- **能力位置**：已装进 pi 全局——`~/.pi/agent/mcp-adapter.json` 的 `open-computer-use`，经 `~/.pi/agent/bin/computer-use-mcp` 本地拉起（两台机器共用同一份配置；脚本按顺序探测 node 与全局包路径，找不到就退回 `npx` 拉固定版本 `@qwen-code/open-computer-use@0.2.3`）。工具：`list_apps`（应用清单）、`get_app_state`（截图 + 无障碍树）、`click` / `drag` / `scroll`、`type_text` / `press_key` / `set_value` / `perform_secondary_action`。使用姿势：优先按元素索引操作（比坐标稳），每步动作后用操作结果或再次 `get_app_state` 验证界面真的变了。
+- **分机器口径（2026-11-18）**：
+  - **macmini（专用自动化机）——直接可用，无需授权**：那里的屏幕、焦点、剪贴板都是留给自动化的。
+  - **本机（用户正在使用的 MacBook）——必须先取得用户当次明确授权**：GUI 自动化会真实占用屏幕、移动鼠标、夺走焦点，落到用户手头就会打断他（与「本机屏幕焦点禁止抢夺」同一立场）。授权形态：命令末尾加 `# AI_AUTHORIZED_LOCAL_COMPUTER_USE`，或创建授权文件 `~/.pi/agent/state/local-computer-use-allow`（用完删除）。授权不跨次复用。
+- **工具强制**：`~/.pi/agent/extensions/computer-use-guard.ts`——在 macmini 上一律放行；在本机拦两类动作：bash 命令里的 open-computer-use 调用形态（子命令 / npx 拉包 / app 二进制 / `open` 打开 app）、MCP 的 computer-use 工具调用，命中即给出上面的授权方法。环境变量 `PI_COMPUTER_USE_HOST=macmini|local` 可覆盖 hostname 判定（调试用）。
+- **新机器安装与就绪检查**：`npm i -g @qwen-code/open-computer-use@0.2.3`；**要求 macOS 14.0+**（二进制 `minos=14.0`，低于此版本一启动就 dyld 崩溃，无兼容构建）；首次使用需在目标机「系统设置 → 隐私与安全性」授予**辅助功能**与**屏幕录制**（TCC 授权只能人工点，脚本改不了）。查状态用 `open-computer-use permission-status`（只读）、引导授权用 `open-computer-use doctor`；实测通过 `list-apps` / `snapshot <app>` / `call get_app_state` 验证。
+- **沿革**：2026-10-08 曾决定彻底弃用（组件全清）；2026-10-09 恢复但限定只有 cuAgent 能用（项目级 MCP + ssh 到 macmini）；**2026-11-18 用户决定取消 cuAgent 这个智能体、把能力装进 pi 全局**——本机使用需授权（沿用「本机焦点禁止抢夺」的立场），macmini 直接可用。
 - 本机还留有其它 harness（Codex）与 cmux 各自自带的 computer-use 组件——非本团队安装、不在维护范围内，处置待用户决定。
 
 ### X / Twitter 查询必须带账号隔离（钩子已硬拦截）
