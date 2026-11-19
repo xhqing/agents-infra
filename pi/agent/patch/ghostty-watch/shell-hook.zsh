@@ -59,11 +59,13 @@ _gw_esc() {
   print -rn -- "$1" | /usr/bin/sed 's/\\/\\\\/g; s/"/\\"/g' 2>/dev/null
 }
 
+typeset -g _GW_LAST=""
+
 _gw_write_beat() {
   local kind="$1"   # 运行中 -> none；主动 exit -> exit
   [[ -n "$_GW_TTY" ]] || return 0
-  local last
-  last=$(builtin fc -ln -1 2>/dev/null | /usr/bin/sed -E 's/^[[:space:]]*[0-9]*[[:space:]]*//' | /usr/bin/head -c 200)
+  local last="$_GW_LAST"
+  last=$(print -rn -- "$last" | /usr/bin/head -c 200)
   local e_cwd e_last
   e_cwd=$(_gw_esc "$PWD")
   e_last=$(_gw_esc "$last")
@@ -75,15 +77,20 @@ _gw_write_beat() {
 }
 
 _gw_precmd() { _gw_write_beat none }
+# last 取本 shell 真正执行过的命令（preexec 记录），不用 fc：fc 在刚开的 shell 里会读到
+# 历史文件里的旧命令，把上一天的命令当成「最近执行」（2026-11-19 踩到）。
+_gw_preexec() { _GW_LAST="$1" }
 # 正常退出（用户在 shell 里 exit / 关窗口触发 SIGHUP 时 zsh 不会执行这里）留一条 exit 记录，
 # 但**不删除文件**——监控要在进程消失后读它，删了就丢证据了。旧文件由 watch.py 定期清理。
 _gw_exit()   { _gw_write_beat exit }
 
 autoload -Uz add-zsh-hook 2>/dev/null && {
   add-zsh-hook precmd _gw_precmd
+  add-zsh-hook preexec _gw_preexec
   add-zsh-hook zshexit _gw_exit
 } || {
   precmd_functions+=(_gw_precmd)
+  preexec_functions+=(_gw_preexec)
 }
 
 _gw_precmd
