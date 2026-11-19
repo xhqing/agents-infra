@@ -26,9 +26,12 @@ except Exception:
 if not isinstance(items, list) or not items:
     sys.exit(0)
 for ev in items:
+    reason = ev.get("reason") or ""
+    hard = any(k in reason for k in ("杀掉", "崩溃", "危急"))
+    title = "⚠  ghostty 上次是被系统终止的" if hard else "⚠  ghostty 上次退出了（没找到系统终止证据）"
     print("")
     print("\033[1;31m╔══════════════════════════════════════════════════════════════╗\033[0m")
-    print("\033[1;31m║  ⚠  ghostty 上次不是正常退出的\033[0m")
+    print(f"\033[1;31m║  {title}\033[0m")
     print("\033[1;31m╚══════════════════════════════════════════════════════════════╝\033[0m")
     print(f"  时间：{ev.get('time')}")
     print(f"  原因：{ev.get('reason')}")
