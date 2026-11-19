@@ -482,5 +482,23 @@
 
   "sidebarAppearance" : {
     "matchTerminalBackground" : true
+  },
+
+  // ── 远程 tmux 镜像全开（2026-11-19 用户要求「默认开启」）──────────────
+  // beta.enabled：打开远程 tmux 镜像，cmux ssh-tmux / 远程 workspace 才可用。
+  // newWorkspaceOnHost：在远程 tmux workspace 下，New Workspace 直接在主机上起 tmux 会话。
+  // originColors / originHostTitles：远程 workspace 按主机着色、同名时在标题后标主机，
+  //   免得多个主机的同名会话分不清。
+  // multiplexer.beta.enabled：每台主机共享一条连接，只登录一次。
+  "remoteTmux" : {
+    "beta" : {
+      "enabled" : true,
+      "newWorkspaceOnHost" : { "enabled" : true },
+      "originColors" : { "enabled" : true },
+      "originHostTitles" : { "enabled" : true }
+    },
+    "multiplexer" : {
+      "beta" : { "enabled" : true }
+    }
   }
 }
