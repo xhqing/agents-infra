@@ -500,5 +500,31 @@
     "multiplexer" : {
       "beta" : { "enabled" : true }
     }
+  },
+
+  // ── 一键开 local-tmux workspace（2026-11-19 用户要）────────────────────
+  // 为什么不是全局默认：cmux 的 local-tmux 是 opt-in 设计，没有配置键；
+  // 全局默认会让每个临时窗口都变成存活会话（关窗不清理、越积越多）。
+  // 所以做成按需快捷键：按一下开一个新 workspace，里面的终端变成一个
+  // local-tmux 会话（同名同目录复用）；随手窗口保持原生。
+  //
+  // 快捷键避开了内置占用：cmd+shift+t 是「重开关闭的浏览器面板」，
+  // cmd+opt+t 是「关闭面板内其它标签」，所以用 cmd+shift+opt+t。
+  // 会话名 = 目录名（非法字符换成 -）+ 路径哈希前 6 位，
+  // 同一个目录反复按复用同一个会话，不同目录即使同名也不会撞。
+  "actions" : {
+    "newLocalTmuxWorkspace" : {
+      "type" : "workspace",
+      "title" : "Local tmux workspace",
+      "subtitle" : "在 cmux 自带的本地 tmux 里开一个新 workspace",
+      "keywords" : ["tmux", "local", "persistent", "persist"],
+      "palette" : true,
+      "shortcut" : "cmd+shift+opt+t",
+      "workspace" : {
+        "name" : "tmux",
+        "cwd" : ".",
+        "setup" : "if [ -n \"$CMUX_WORKSPACE_ID\" ]; then n=$(basename \"$PWD\" | tr -c 'A-Za-z0-9_-' '-' | sed -E 's/-+$//')-$(printf '%s' \"$PWD\" | md5 -q | cut -c1-6); /Applications/cmux.app/Contents/Resources/bin/cmux local-tmux start --name \"$n\" --workspace \"$CMUX_WORKSPACE_ID\" --cwd \"$PWD\" --json; fi"
+      }
+    }
   }
 }
