@@ -40,7 +40,10 @@
     "paneFlashOnTyping": false,
     "paneFlash": false,
     "paneFlashDoubleBlink": false,
-    "unreadPaneRing": false
+    "unreadPaneRing": false,
+    // 标题栏铃铛上的未读数角标（0.65.2.2-r29 起支持）：false = 不再显示数字，
+    // 侧边栏未读徽标、通知面板、桌面弹窗、声音都不受影响。
+    "titlebarBadge": false
   },
 
   // 侧栏不再渲染上一条通知的正文，减少排版与 Markdown 渲染开销。
