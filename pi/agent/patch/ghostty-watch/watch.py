@@ -104,9 +104,25 @@ def scan_processes() -> dict[int, dict]:
     return procs
 
 
+def tty_of_pid() -> dict[int, str]:
+    """{pid: tty} 映射，用于把 ghostty 的直接子进程对回 shell 心跳。"""
+    out = run(["ps", "-eo", "pid=,tty="])
+    mapping: dict[int, str] = {}
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        try:
+            mapping[int(parts[0])] = parts[1]
+        except ValueError:
+            continue
+    return mapping
+
+
 def scan_children(ghostty_pid: int) -> list[dict]:
     """ghostty 的子进程 = 一个个终端会话（surface）。"""
     out = run(["ps", "-eo", "pid=,ppid=,rss=,etime=,command="])
+    ttys = tty_of_pid()
     kids: list[dict] = []
     for line in out.splitlines():
         parts = line.split(None, 4)
@@ -118,7 +134,8 @@ def scan_children(ghostty_pid: int) -> list[dict]:
             continue
         if ppid != ghostty_pid:
             continue
-        kids.append({"pid": pid, "rss_kb": rss, "etime": parts[3], "cmd": parts[4]})
+        kids.append({"pid": pid, "rss_kb": rss, "etime": parts[3], "cmd": parts[4],
+                     "tty": ttys.get(pid, "")})
     return kids
 
 
@@ -137,6 +154,15 @@ def shell_heartbeats() -> dict[int, dict]:
 
 def describe_session(kid: dict, beats: dict[int, dict]) -> str:
     beat = beats.get(kid["pid"])
+    if not beat:
+        # 心跳记的是真正在跑的那个 shell 的 pid；ghostty 的直接子进程往往是一层
+        # login 包装（/usr/bin/login … exec -l /bin/zsh），两者 pid 不同。只按 pid
+        # 匹配会把有记录的会话也报成「cwd 未知」（2026-11-19 实测踩到），所以退一步
+        # 按「父 pid = 子进程 pid」或 tty 相同来对上。
+        for b in beats.values():
+            if b.get("ppid") == kid["pid"] or (kid.get("tty") and b.get("tty") == kid["tty"]):
+                beat = b
+                break
     cmd = kid["cmd"]
     # login -q -flp xhq /bin/bash ... -c exec -l /bin/zsh 只是登录壳的包装，展示真正含义
     short = "zsh"
