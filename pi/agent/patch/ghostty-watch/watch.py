@@ -241,17 +241,29 @@ def shell_heartbeats() -> dict[int, dict]:
     return out
 
 
-def describe_session(kid: dict, beats: dict[int, dict]) -> str:
+def match_beat(kid: dict, beats: dict[int, dict]) -> dict | None:
+    """把 ghostty 的直接子进程对回 shell 心跳。
+
+    心跳记的是真正在跑的那个 shell 的 pid；ghostty 的直接子进程往往是一层 login
+    包装（/usr/bin/login … exec -l /bin/zsh），两者 pid 不同。只按 pid 匹配会把有
+    记录的会话也报成「cwd 未知」（2026-11-19 实测踩到），所以退一步按「父 pid =
+    子进程 pid」或 tty 相同来对上。
+
+    **归因判定（exit 记录）必须走同一个匹配**：只修展示、不修判定时，用户关窗口
+    留下的 exit 记录被漏掉，正常退出被误报成「很可能是被系统杀掉」并推了飞书
+    （2026-11-19 用户实测纠正）。
+    """
     beat = beats.get(kid["pid"])
-    if not beat:
-        # 心跳记的是真正在跑的那个 shell 的 pid；ghostty 的直接子进程往往是一层
-        # login 包装（/usr/bin/login … exec -l /bin/zsh），两者 pid 不同。只按 pid
-        # 匹配会把有记录的会话也报成「cwd 未知」（2026-11-19 实测踩到），所以退一步
-        # 按「父 pid = 子进程 pid」或 tty 相同来对上。
-        for b in beats.values():
-            if b.get("ppid") == kid["pid"] or (kid.get("tty") and b.get("tty") == kid["tty"]):
-                beat = b
-                break
+    if beat:
+        return beat
+    for b in beats.values():
+        if b.get("ppid") == kid["pid"] or (kid.get("tty") and b.get("tty") == kid.get("tty")):
+            return b
+    return None
+
+
+def describe_session(kid: dict, beats: dict[int, dict]) -> str:
+    beat = match_beat(kid, beats)
     cmd = kid["cmd"]
     # login -q -flp xhq /bin/bash ... -c exec -l /bin/zsh 只是登录壳的包装，展示真正含义
     short = "zsh"
@@ -366,42 +378,55 @@ def _ips_matches(path: Path, pid: int, cmd: str) -> bool:
     return False
 
 
-def classify(pid: int, rec: dict) -> tuple[str, list[str]]:
+def classify(pid: int, rec: dict) -> tuple[str, list[str], str]:
+    """归因，返回 (原因, 注记, 处置)。
+
+    处置三档（2026-11-19 用户纠正误报后定的口径）：
+      manual     —— 所有会话都有 exit 记录 = 用户自己关的，只记日志；
+      suspicious —— 无系统终止证据、也不确定（缺 exit 记录），只记日志 + 终端横幅；
+      alert      —— 有硬证据（memorystatus / 崩溃报告 / jetsam）或内存危急，立即通知。
+    """
     notes: list[str] = []
     beats = shell_heartbeats()
     kids = rec.get("children") or []
 
-    # 1) 所有会话都是「自己 exit 掉的」-> 用户主动关的
+    # 1) 所有会话都是「自己 exit 掉的」-> 用户主动关的（关掉最后一个窗口也走这条）
     if kids:
-        exited = [k for k in kids if (beats.get(k["pid"]) or {}).get("exit_kind") == "exit"]
+        exited = [k for k in kids if (match_beat(k, beats) or {}).get("exit_kind") == "exit"]
         if len(exited) == len(kids):
-            return "手动退出（所有会话都正常 exit）", notes
+            return "手动退出（所有会话都正常 exit）", notes, "manual"
 
     # 2) 内核内存高水位（这是实测见过的那条路）
     if find_memory_kill(pid):
-        return "被系统杀掉（内核内存高水位 memorystatus / SIGKILL）", notes
+        return "被系统杀掉（内核内存高水位 memorystatus / SIGKILL）", notes, "alert"
 
     # 3) 崩溃报告（按 pid / procPath 精确匹配，避免误认别的 ghostty 进程的报告）
     crash = find_crash_report(pid, rec.get("cmd", ""))
     if crash:
         notes.append(f"崩溃报告: {crash}")
-        return "崩溃（生成了崩溃报告）", notes
+        return "崩溃（生成了崩溃报告）", notes, "alert"
 
     # 4) 全局 jetsam 内存回收
     jetsam = find_jetsam_kill(pid)
     if jetsam:
         notes.append(f"JetsamEvent: {jetsam}")
-        return "被系统杀掉（jetsam 内存回收）", notes
+        return "被系统杀掉（jetsam 内存回收）", notes, "alert"
 
-    # 5) 无硬证据时看当时的内存压力：压力高就说明大概率不是你自己关的
+    # 5) 无硬证据时看当时的内存压力。
+    #    只有危急（4）才算「很可能是被杀」；警告（2）在 8GB 机器上几乎是常态，拿它
+    #    当证据会把「手动关窗口」系统性误报成被杀（2026-11-19 实测：关掉最后一个
+    #    窗口正常退出，被判成「很可能是被系统杀掉」并推了飞书）。
     lvl = pressure_level()
-    if lvl >= 2:
+    if lvl >= 4:
         notes.append(f"进程消失时内核内存压力等级={lvl}（1=正常 2=警告 4=危急）")
-        return "消失（当时系统内存压力高，很可能是被系统杀掉）", notes
+        return "消失（进程消失时内存压力危急，很可能是被系统杀掉）", notes, "alert"
+    if lvl >= 2:
+        notes.append(f"进程消失时内核内存压力等级={lvl}（仅警告，不作为被杀证据）")
 
     if kids:
-        notes.append(f"{len(kids)} 个会话没有 exit 记录（更像被强制终止，而不是 Cmd+Q）")
-    return "消失（无系统终止记录：可能是你手动关闭，也可能是静默被杀）", notes
+        missing = sum(1 for k in kids if (match_beat(k, beats) or {}).get("exit_kind") != "exit")
+        notes.append(f"{missing}/{len(kids)} 个会话没有 exit 记录（可能是关窗口，也可能是被强制终止）")
+    return "消失（无系统终止证据：多半是你手动关闭）", notes, "suspicious"
 
 
 # ---------- 事件 ----------
@@ -586,7 +611,7 @@ def notify_legacy(title: str, body: str) -> None:
 
 
 def handle_disappear(pid: int, rec: dict) -> None:
-    reason, notes = classify(pid, rec)
+    reason, notes, verdict = classify(pid, rec)
     kids = rec.get("children") or []
     rss_mb = round(rec.get("peak_rss_kb", 0) / 1024)
     beats = shell_heartbeats()
@@ -594,16 +619,6 @@ def handle_disappear(pid: int, rec: dict) -> None:
     for k in kids:
         if k.get("pi_session"):
             notes.append(f"恢复：cd {k.get('pi_cwd') or '?'} && pi --session {k['pi_session'][:8]}")
-
-    # 先把 pending 落盘（通知可能卡在网络上，不能让它拖住“一定知道”的那条路）
-    add_pending({
-        "time": now_str(),
-        "pid": pid,
-        "reason": reason,
-        "peak_mb": rss_mb,
-        "sessions": sessions,
-        "notes": notes,
-    })
 
     body_lines = [reason, f"峰值 {rss_mb}MB｜丢失 {len(sessions)} 个会话"]
     for s in sessions[:8]:
@@ -618,6 +633,27 @@ def handle_disappear(pid: int, rec: dict) -> None:
         lines.append(f"          └─ {s}")
     for n in notes:
         lines.append(f"          · {n}")
+
+    # 用户自己关的（关掉最后一个窗口 = 所有会话都 exit）不该弹任何通知
+    if verdict == "manual":
+        lines.append("          · 未通知（所有会话都有 exit 记录 = 你主动关的）")
+        append_event(lines)
+        return
+
+    # 先把 pending 落盘（通知可能卡在网络上，不能让它拖住“一定知道”的那条路）
+    add_pending({
+        "time": now_str(),
+        "pid": pid,
+        "reason": reason,
+        "peak_mb": rss_mb,
+        "sessions": sessions,
+        "notes": notes,
+    })
+
+    if verdict == "suspicious":
+        lines.append("          · 未即时通知（无系统终止证据；下次开终端时看横幅）")
+        append_event(lines)
+        return
 
     channel = notify("ghostty 被终止", "\n".join(body_lines))
     if isinstance(channel, tuple):
