@@ -70,17 +70,26 @@ python3 ~/.pi/agent/patch/ghostty-watch/watch.py once      # 单轮扫描（调�
 
 ```
 2026-11-15 16:27:58  DIED   ghostty pid=80999  原因=被系统杀掉（内核内存高水位 memorystatus / SIGKILL）  峰值≈566MB  会话=3个
-          └─ /Users/xhq/Developer/dev-agent (zsh) [最近: pi]
+          └─ /Users/xhq/Developer/dev-agent (zsh) [最近: pi] [pi 会话 01a1f257]
           └─ /Users/xhq/Developer/cmux (zsh)
           └─ /Users/xhq (zsh)
 2026-11-15 16:30:34  START  ghostty pid=90129  (ghostty)
 ```
 
+## 崩溃后怎么恢复
+
+每条会话记录带三类线索：目录、最近执行的命令、窗口里在跑的 pi 会话 id（`[pi 会话 01a1f257]`）。按线索恢复：
+
+- **有 pi 会话 id** → 精确恢复那一次：`cd <目录> && pi --session 01a1f257`（支持 UUID 前缀）。
+- **只有目录和命令** → 到该目录里 `pi -r` 自己挑。
+- **别用 `pi -c`**：`-c` 接的是「这个项目最近一次会话」，而同一个项目常同时开好几个（还有开在 cmux 里的），未必是丢掉的那个（2026-11-19 用户指出）。
+- ghostty 自己救不回窗口：被 SIGKILL 时没有保存态（`window-save-state` 只在正常退出时写盘），窗口只能靠上面的记录手动重建。
+
 ## 局限（不吹牛）
 
 - **它不能阻止被杀**。macOS 上没有能让第三方进程豁免内存水位的官方开关（SIP 开着时更不可能）。本工具只负责「让这件事一定被看见」。
 - 想彻底不丢工作仍然是 tmux：`tmux new -s work`，ghostty 没了再 `tmux attach`。
-- 「哪个窗口」的定位靠 shell 心跳（cwd + 最近一条命令），不依赖窗口标题，也不需要辅助功能权限。
+- 「哪个窗口」的定位靠 shell 心跳（cwd + 最近一条命令，现在还有 pi 会话 id），不依赖窗口标题，也不需要辅助功能权限。心跳按 tty 落文件、会话按 tty 或父 pid 对回 ghostty 的子进程（直接子进程是 `login` 包装层，pid 与真正跑命令的 shell 不同）。
 - 系统通知的来源显示成「脚本编辑器」（osascript 的身份），标题里会写清「ghostty 被终止」。飞书才是主渠道，桌面通知只是备用。
 - 系统日志的 debug 级记录有保留窗口限制（通常数小时），所以归因在**事件发生时**完成并落盘，事后看 `events.log` 即可，不必再翻 `log show`。
 
