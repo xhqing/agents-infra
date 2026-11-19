@@ -570,7 +570,7 @@ ssh mac-mini 'tmux kill-session -t pi-<名字>'
 每个 Agent 会话**结束任务之前**（向用户交付 / 收尾汇报之前），必须检查**自己负责的全部子项目仓库**是否干净；**不干净的全部要处理干净**才能收尾——不是只报告，也不是留给「下次自然提交」。
 
 - **干净口径**：`git status --porcelain` 无输出（无未提交 / 未暂存改动、无未跟踪文件）；与远端无落后的未拉取分叉；本地领先的提交该推就推（经各仓库自己的 PR + CI 流程）。
-- **检查范围**：该 Agent 负责的子项目清单——各 Agent 项目 `AGENTS.md` 的「子项目清单」节与全局 `~/.pi/agent/docs/agents-registry.md` 的「子项目映射」表（两者須一致）；**以及本次会话在项目里创建的 worktree**（`git -C <主工作区> worktree list` 查，用 `git -C <worktree 绝对路径> status --porcelain` 逐个核验——worktree 的工作区与暂存区跟主工作区完全独立，只看主工作区的 status 会漏掉未提交内容）。
+- **检查范围**：该 Agent 负责的子项目清单——各 Agent 项目 `AGENTS.md` 的「子项目清单」节与全局 `~/.pi/agent/docs/agents-registry.md` 的「子项目映射」表（两者须一致）；**以及本次会话在项目里创建的 worktree**（`git -C <主工作区> worktree list` 查，用 `git -C <worktree 绝对路径> status --porcelain` 逐个核验——worktree 的工作区与暂存区跟主工作区完全独立，只看主工作区的 status 会漏掉未提交内容）。
 - **worktree 怎么提交（2026-11-04 用户立）**：任务在 worktree 里做的，按仓库流程走 `/add` → `/commit`，**全部 git 命令带 `git -C <worktree 绝对路径>`**（不能 `cd`，也不看主工作区的 status / 暂存区）；本地 main 的对齐与发版在主工作区执行（详见 add / commit skill 的「worktree 场景」节）。worktree 分支属「非 main 分支」，自动触发照常生效。
 - **处理方式**：按该仓库自己的流程处理——`/add` 预检 → `/commit`（该链条该 bump / 发版就照常走）；多仓库逐个处理；查不到、拿不准是不是在途 WIP 的，向用户说明后再动。**被 add-mode 或 commit-mode 暂停的仓库不适用本条**（任一暂停即跳过）：用户特意暂停了自动提交（多半在看 diff），保持原样、不催不提交，收尾时如实说明「这几个仓库被 add-mode / commit-mode 暂停，改动保留未提交」即可。
 - **为什么**：子项目随附版同步、文档补记这类零散改动会长期烂在各个工作区里（2026-10-09 实测：全队 22 个子项目仓库有 16 个不干净，其中 Atlas 名下 8 个只挂着上一轮同步改动未提交）。收尾自检让每个 Agent 交付时，名下所有仓库都处于「干净 + 与远端同步」的终态。

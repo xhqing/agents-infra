@@ -206,7 +206,7 @@ export default function (pi: ExtensionAPI) {
 						content:
 							`【main-wip】这些文件还有未提交改动，但它们正在 cmux 里打开：${busy.join("、")}。\n` +
 							`你在看或编辑它们，因此自动建 worktree → 提交 → PR 的流程已暂停（否则你会看到文件内容被自动改动）。\n` +
-							`要提交时：先关掉对应的文件页面（或切到別的文斈），再说一声提交即可。`,
+							`要提交时：先关掉对应的文件页面（或切到别的文章），再说一声提交即可。`,
 					},
 					{ deliverAs: "followUp" },
 				);
