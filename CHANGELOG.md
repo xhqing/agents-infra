@@ -14,6 +14,13 @@
 - **镜像同步（2026-11-19）**：从全局 `~/.pi/agent` 单向发布。
   **为什么改**：全局能力层有改动，本仓库是它的开源镜像，必须保持一致。
   **改了什么**：2 个文件——
+  - `pi/agent/extensions/git-status-guard.ts`
+  - `pi/agent/skills/screen-record/`
+  **回归风险**：无（只同步内容，不改本仓库自身逻辑）。
+
+- **镜像同步（2026-11-19）**：从全局 `~/.pi/agent` 单向发布。
+  **为什么改**：全局能力层有改动，本仓库是它的开源镜像，必须保持一致。
+  **改了什么**：2 个文件——
   - `pi/agent/patch/ghostty-watch/README.md`
   - `pi/agent/patch/ghostty-watch/shell-hook.zsh`
   **回归风险**：无（只同步内容，不改本仓库自身逻辑）。
