@@ -76,9 +76,21 @@ function isAuthorizedCommit(command: string): boolean {
 }
 
 /** 在指定目录实测 git status；失败（非仓库 / 超时等）返回 null。 */
+/** 在指定目录实测 git status；失败（非仓库 / 超时等）返回 null。
+ *
+ * stderr 必须丢弃：本函数会对「本次 run 触及的每个目标目录」逐个探测，其中可能包含
+ * /tmp、已删除的 worktree 等非仓库路径；不吞掉 stderr 时 git 会往 TUI 打
+ * `fatal: not a git repository ...`，用户看到一堆红字却不知道那是无害的探测失败
+ * （2026-11-19 用户反馈）。stdout 仍按 encoding 返回给调用方。
+ */
 function runGitStatus(cwd: string): string | null {
 	try {
-		return execSync("git status", { cwd, encoding: "utf8", timeout: 10000 }).trim();
+		return execSync("git status", {
+			cwd,
+			encoding: "utf8",
+			timeout: 10000,
+			stdio: ["ignore", "pipe", "ignore"],
+		}).trim();
 	} catch {
 		return null;
 	}
@@ -126,12 +138,17 @@ function commandTargets(command: string, cwd: string): string[] {
 	return out;
 }
 
-/** 在指定目录跑一条 git 命令，失败（非仓库 / 超时等）返回 null，不抛。 */
+/** 在指定目录跑一条 git 命令，失败（非仓库 / 超时等）返回 null，不抛。
+ *
+ * 同样丢弃 stderr：canonicalTarget() 会对每个候选路径试 `rev-parse --show-toplevel`，
+ * 非仓库路径必然失败，错误不该出现在用户的终端里（2026-11-19 用户反馈）。
+ */
 function gitOut(dir: string, args: string[]): string | null {
 	try {
 		return execFileSync("git", ["-C", dir, ...args], {
 			encoding: "utf8",
 			timeout: 5000,
+			stdio: ["ignore", "pipe", "ignore"],
 		}).trim();
 	} catch {
 		return null;
