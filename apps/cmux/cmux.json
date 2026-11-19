@@ -508,8 +508,9 @@
   // 所以做成按需快捷键：按一下开一个新 workspace，里面的终端变成一个
   // local-tmux 会话（同名同目录复用）；随手窗口保持原生。
   //
-  // 快捷键避开了内置占用：cmd+shift+t 是「重开关闭的浏览器面板」，
-  // cmd+opt+t 是「关闭面板内其它标签」，所以用 cmd+shift+opt+t。
+  // 快捷键用 cmd+shift+t：它原本是「重新打开关闭的浏览器面板」，配置里的
+  // action 快捷键在 handleCustomShortcut 里先于内置绑定匹配，所以直接覆盖
+  // （内置功能仍可在菜单里点，只是不再占这个键）。
   // 会话名 = 目录名（非法字符换成 -）+ 路径哈希前 6 位，
   // 同一个目录反复按复用同一个会话，不同目录即使同名也不会撞。
   "actions" : {
@@ -519,7 +520,7 @@
       "subtitle" : "在 cmux 自带的本地 tmux 里开一个新 workspace",
       "keywords" : ["tmux", "local", "persistent", "persist"],
       "palette" : true,
-      "shortcut" : "cmd+shift+opt+t",
+      "shortcut" : "cmd+shift+t",
       "workspace" : {
         "name" : "tmux",
         "cwd" : ".",
