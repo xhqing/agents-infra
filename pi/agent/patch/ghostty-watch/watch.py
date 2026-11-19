@@ -27,7 +27,7 @@ import re
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 STATE_DIR = Path(os.environ.get("GHOSTTY_WATCH_STATE", str(Path.home() / ".local/state/ghostty-watch")))
@@ -119,11 +119,89 @@ def tty_of_pid() -> dict[int, str]:
     return mapping
 
 
+PI_SESSIONS = Path.home() / ".pi/agent/sessions"
+_pi_session_cache: dict[int, tuple[str, str]] = {}
+
+
+def _session_slug(cwd: str) -> str:
+    return "--" + cwd.strip("/").replace("/", "-") + "--"
+
+
+def _proc_start_utc(pid: int) -> datetime | None:
+    out = run(["ps", "-o", "lstart=", "-p", str(pid)]).strip()
+    if not out:
+        return None
+    try:
+        local = datetime.strptime(" ".join(out.split()), "%a %b %d %H:%M:%S %Y")
+    except ValueError:
+        return None
+    return datetime.fromtimestamp(local.timestamp(), tz=timezone.utc).replace(tzinfo=None)
+
+
+def _proc_cwd(pid: int) -> str:
+    out = run(["lsof", "-p", str(pid), "-a", "-d", "cwd", "-Fn"], timeout=10)
+    for line in out.splitlines():
+        if line.startswith("n/"):
+            return line[1:]
+    return ""
+
+
+def pi_session_of(pid: int) -> dict:
+    """认出一个 pi 进程跑的是哪个会话。
+
+    为什么不能靠 `pi -c`：同一个项目常同时开好几个会话（还有人开在 cmux 里），
+    “最近一次的”并不等于“这个窗口里的那一次”（2026-11-19 用户指出）。而且 pi 进程
+    不一直持着会话文件的句柄（lsof 看不到），所以改成用启动时间对齐：进程启动的那一秒，
+    正好就是会话文件名里的启动时间。
+    """
+    cached = _pi_session_cache.get(pid)
+    if cached:
+        return {"session": cached[0], "cwd": cached[1]}
+    started = _proc_start_utc(pid)
+    cwd = _proc_cwd(pid)
+    sid = ""
+    if started and cwd:
+        d = PI_SESSIONS / _session_slug(cwd)
+        if d.is_dir():
+            for f in d.glob("*.jsonl"):
+                stamp = f.name.split("_", 1)[0]
+                try:
+                    when = datetime.strptime(stamp, "%Y-%m-%dT%H-%M-%S-%fZ")
+                except ValueError:
+                    continue
+                if abs((when - started).total_seconds()) <= 10:
+                    parts = f.stem.split("_", 1)
+                    sid = parts[1] if len(parts) > 1 else ""
+                    break
+    if len(_pi_session_cache) > 200:
+        _pi_session_cache.clear()
+    _pi_session_cache[pid] = (sid, cwd)
+    return {"session": sid, "cwd": cwd}
+
+
+def _find_pi(pid: int, children_of: dict[int, list[int]], rows: dict[int, dict],
+             max_depth: int = 8) -> int:
+    """在这个会话的子孙进程里找 pi 进程（shell → pi，也可能隔着 tmux 之类的层）。"""
+    frontier = [pid]
+    for _ in range(max_depth):
+        nxt: list[int] = []
+        for p in frontier:
+            for kid in children_of.get(p, []):
+                if os.path.basename(rows[kid]["cmd"].split(" ", 1)[0]) == "pi":
+                    return kid
+                nxt.append(kid)
+        if not nxt:
+            break
+        frontier = nxt
+    return 0
+
+
 def scan_children(ghostty_pid: int) -> list[dict]:
     """ghostty 的子进程 = 一个个终端会话（surface）。"""
     out = run(["ps", "-eo", "pid=,ppid=,rss=,etime=,command="])
     ttys = tty_of_pid()
-    kids: list[dict] = []
+    rows: dict[int, dict] = {}
+    children_of: dict[int, list[int]] = {}
     for line in out.splitlines():
         parts = line.split(None, 4)
         if len(parts) < 5:
@@ -132,10 +210,21 @@ def scan_children(ghostty_pid: int) -> list[dict]:
             pid, ppid, rss = int(parts[0]), int(parts[1]), int(parts[2])
         except ValueError:
             continue
-        if ppid != ghostty_pid:
+        rows[pid] = {"ppid": ppid, "rss_kb": rss, "etime": parts[3], "cmd": parts[4]}
+        children_of.setdefault(ppid, []).append(pid)
+    kids: list[dict] = []
+    for pid, row in rows.items():
+        if row["ppid"] != ghostty_pid:
             continue
-        kids.append({"pid": pid, "rss_kb": rss, "etime": parts[3], "cmd": parts[4],
-                     "tty": ttys.get(pid, "")})
+        kid = {"pid": pid, "rss_kb": row["rss_kb"], "etime": row["etime"],
+               "cmd": row["cmd"], "tty": ttys.get(pid, "")}
+        pi_pid = _find_pi(pid, children_of, rows)
+        if pi_pid:
+            info = pi_session_of(pi_pid)
+            kid["pi_pid"] = pi_pid
+            kid["pi_session"] = info["session"]
+            kid["pi_cwd"] = info["cwd"]
+        kids.append(kid)
     return kids
 
 
@@ -171,11 +260,20 @@ def describe_session(kid: dict, beats: dict[int, dict]) -> str:
     elif cmd.startswith("/usr/bin/login"):
         short = "shell"
     if beat:
-        cwd = beat.get("cwd") or "?"
+        cwd = beat.get("cwd") or kid.get("pi_cwd") or "?"
         last = (beat.get("last") or "").strip()
         extra = f" [最近: {last}]" if last else ""
-        return f"{cwd} ({short}){extra}"
-    return f"(cwd 未知) ({short})"
+        return f"{cwd} ({short}){extra}{_pi_tag(kid)}"
+    return f"(cwd 未知) ({short}){_pi_tag(kid)}"
+
+
+def _pi_tag(kid: dict) -> str:
+    """窗口里的 pi 会话 id（有就带上，恢复时直接 `pi --session <id>` 就对了）。"""
+    if kid.get("pi_session"):
+        return f" [pi 会话 {kid['pi_session'][:8]}]"
+    if kid.get("pi_pid"):
+        return " [pi 运行中]"
+    return ""
 
 
 # ---------- 归因 ----------
@@ -493,6 +591,9 @@ def handle_disappear(pid: int, rec: dict) -> None:
     rss_mb = round(rec.get("peak_rss_kb", 0) / 1024)
     beats = shell_heartbeats()
     sessions = [describe_session(k, beats) for k in kids]
+    for k in kids:
+        if k.get("pi_session"):
+            notes.append(f"恢复：cd {k.get('pi_cwd') or '?'} && pi --session {k['pi_session'][:8]}")
 
     # 先把 pending 落盘（通知可能卡在网络上，不能让它拖住“一定知道”的那条路）
     add_pending({
