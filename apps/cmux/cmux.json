@@ -526,6 +526,21 @@
         "cwd" : ".",
         "setup" : "if [ -n \"$CMUX_WORKSPACE_ID\" ]; then n=$(basename \"$PWD\" | tr -c 'A-Za-z0-9_-' '-' | sed -E 's/-+$//')-$(printf '%s' \"$PWD\" | md5 -q | cut -c1-6); /Applications/cmux.app/Contents/Resources/bin/cmux local-tmux start --name \"$n\" --workspace \"$CMUX_WORKSPACE_ID\" --cwd \"$PWD\" --json; fi"
       }
+    },
+
+    // 远程 tmux：把 mac-mini 上的 tmux 会话镜像进来（每个会话一个 workspace）。
+    // 需要 remoteTmux.beta.enabled（上面已开）与远程主机装了 tmux。
+    // 换主机就改这一行的 mac-mini（~/.ssh/config 里的 Host 名）。
+    // 快捷键与本地配对：cmd+shift+t 本地、cmd+shift+opt+t 远程。
+    // command 动作默认在新 tab 里执行，不打断当前终端。
+    "openRemoteTmux" : {
+      "type" : "command",
+      "title" : "Remote tmux (mac-mini)",
+      "subtitle" : "把 mac-mini 上的 tmux 会话镜像进 cmux",
+      "keywords" : ["tmux", "remote", "ssh", "macmini"],
+      "palette" : true,
+      "shortcut" : "cmd+shift+opt+t",
+      "command" : "/Applications/cmux.app/Contents/Resources/bin/cmux ssh-tmux mac-mini"
     }
   }
 }
