@@ -75,7 +75,6 @@ function isAuthorizedCommit(command: string): boolean {
 	return command.includes(AUTH_MARK) && hasGitCommit(command);
 }
 
-/** 在指定目录实测 git status；失败（非仓库 / 超时等）返回 null。 */
 /** 在指定目录实测 git status；失败（非仓库 / 超时等）返回 null。
  *
  * stderr 必须丢弃：本函数会对「本次 run 触及的每个目标目录」逐个探测，其中可能包含
