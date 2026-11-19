@@ -9,6 +9,13 @@
 
 > 按全局 CLAUDE.md「同步动作只记权威源的 CHANGELOG」规矩：通用能力的同步只记本文件，**不记到各业务 agent 项目**（如 DayTradingAgent 等）的 CHANGELOG，避免污染那些项目自己的变更记录。
 
+## 2026-11-20
+
+- **版本 2.3.1 → 2.4.0（minor）：cmux 配置新增功能 + 关闭标题栏未读角标**。
+  **为什么改**：自 v2.3.1 以来 `apps/cmux/cmux.json` 合入了 4 个 `feat(cmux)` 提交（远程 tmux 镜像默认开启、一键 local-tmux workspace、本地 / 远程快捷键），属新增功能，按 semver 走 minor。
+  **改了什么**：① `remoteTmux` 全开——镜像、在主机上开 workspace、按主机着色与标题标主机、每台主机共享一条连接（#285）；② 新增 `newLocalTmuxWorkspace` 动作与 `cmd+shift+t` 快捷键，会话名 = 目录名 + 路径哈希前 6 位（#286、#287）；③ 新增 `openRemoteTmux` 动作与 `cmd+shift+opt+t` 快捷键（`cmux ssh-tmux mac-mini`，#288）；④ 关闭标题栏铃铛的未读数角标 `notifications.titlebarBadge=false`（cmux 0.65.2.2-r29 起支持；侧边栏未读徽标、通知面板、桌面弹窗、声音不变，#292）；⑤ `VERSION` 与两版 README 版本徽章同步到 2.4.0。
+  **回归风险**：无。改动只落 `apps/cmux/cmux.json` 镜像与版本号载体（`VERSION`、两版 README 徽章），`pi/agent/` 镜像链路未动；cmux 旧版本会忽略 `titlebarBadge` 键。
+
 ## 2026-11-19
 
 - **镜像同步（2026-11-19）**：从全局 `~/.pi/agent` 单向发布。
