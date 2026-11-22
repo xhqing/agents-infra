@@ -16,6 +16,8 @@ add / commit」（已被 git-main-guard 拦死），而是先把改动搬到一�
      显示改动后的内容，不再出现「改动被搬走后主工作区短暂变回旧版本」的观感。
      代价是合并前不能对主工作区做 ff merge（脏工作区会被 git 拒绝），所以合并后必须
      跑一次 `--finalize` 收尾；
+  5b. **文件在 cmux 里打开 → 照常搬运（2026-11-22 修订）**：搬运只往新目录复制、不改
+     主工作区，打开状态不影响它；旧行为「打开就拒」保留为 `--strict-open`。
   6. `--finalize`：先逐路径比对「主工作区内容」与「目标 ref（默认 origin/main）」，
      全部一致（证明改动已进 main）才丢弃工作区改动并快进；一处不一致就报错停下，
      **绝不盲删**。
@@ -358,7 +360,9 @@ def main() -> int:
     ap.add_argument("--ref", default="origin/main",
                     help="--finalize 用来比对的 ref（默认 origin/main）")
     ap.add_argument("--ignore-open", action="store_true",
-                    help="即使文件正在 cmux 里打开也强制搬运（默认拒绝，避免打断用户）")
+                    help="[已废弃，等同默认行为] 文件在 cmux 里打开也照常搬运（2026-11-22 起默认即此行为）")
+    ap.add_argument("--strict-open", action="store_true",
+                    help="旧行为：改动文件在 cmux 里打开就拒绝搬运（退出码 9）")
     args = ap.parse_args()
 
     probe = Path(args.repo).expanduser()
@@ -409,18 +413,22 @@ def main() -> int:
 
     moved = [it["path"] for it in items]
 
-    # 用户正在 cmux 里看 / 编辑这些文件 → 不搬（否则他会看到文件内容被自动改动）
-    if not args.ignore_open:
-        opened = cmux_open_files()
-        busy = [p for p in moved if Path(p).name in opened]
-        if busy:
-            return die(
-                "这些改动文件在 cmux 里处于打开状态（你正在看或编辑），已暂停自动搬运："
-                + "、".join(busy)
-                + "。如需提交，先关闭对应文件页面（或切到别的文件）再重试；"
-                "确实要强制搬运可加 --ignore-open。",
-                9,
-            )
+    # 文件正在 cmux 里打开：只提示、不拦（2026-11-22 修订）
+    # 搬运只往新 worktree 复制，主工作区一个字节都不改；真正会写磁盘的是 --finalize，
+    # 那里仍有「全文内容与 ref 逐字节一致」+ 打开状态检查。
+    # 旧行为（打开就拒）保留为 --strict-open。
+    opened = cmux_open_files()
+    busy = [p for p in moved if Path(p).name in opened]
+    if busy:
+        note = (
+            "这些改动文件在 cmux 里处于打开状态："
+            + "、".join(busy)
+            + "。搬运只复制到新 worktree、不改主工作区，继续执行；"
+            "收尾（--finalize）时若仍打开会停下等你关闭。"
+        )
+        if args.strict_open:
+            return die(note + "（--strict-open 已开启，拒绝搬运）", 9)
+        print("[WARN] " + note)
 
     print(f"[PLAN] 仓库：{root}")
     print(f"[PLAN] 分支：{branch_name}")

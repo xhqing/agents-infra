@@ -54,7 +54,7 @@ const MAIN_BRANCHES = new Set(["main", "master"]);
 const MAX_KICKS = 3;
 const COOLDOWN_MS = 5 * 60 * 1000;
 // 「文件正被打开」提示的冷却（同一批文件 10 分钟内只提示一次）
-const OPEN_NOTICE_COOLDOWN_MS = 10 * 60 * 1000;
+const OPEN_NOTICE_COOLDOWN_MS = 10 * 60 * 1000; // 旧版「打开文件时提示」的冷却；2026-11-22 起不再使用，保留常量以免再改回时忘记
 
 function git(cwd: string, args: string[]): { ok: boolean; out: string } {
 	try {
@@ -168,7 +168,6 @@ export default function (pi: ExtensionAPI) {
 	let kicks = 0;
 	let lastKickAt = 0;
 	let lastRoot = "";
-	let lastOpenNoticeAt = 0;
 
 	pi.on("agent_settled", async (_event, ctx) => {
 		try {
@@ -191,26 +190,14 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			// 改动文件正被用户在 cmux 里打开（看或编辑）→ 暂停自动搬运，只提示
+			// 改动文件在 cmux 里打开：只记日志、不再阻断搬运（2026-11-22 修订）
+			// 搬运只往新 worktree 复制、不改主工作区；真正会写磁盘的收尾（--finalize）
+			// 自己检查「全文与 origin/main 一致」+ 打开状态，不在这里提前挡。
+			// 旧行为（打开就暂停）导致的死锁：文件一直开着 → 改动永远搬不走 → main 永久无法快进。
 			const opened = cmuxOpenMarkdown();
 			const busy = state.changed.filter((p) => opened.has(p.split("/").pop() ?? ""));
 			if (busy.length > 0) {
-				dbg(`opened in cmux, skip kick: ${busy.join(", ")}`);
-				const nowOpen = Date.now();
-				if (nowOpen - lastOpenNoticeAt < OPEN_NOTICE_COOLDOWN_MS) return;
-				lastOpenNoticeAt = nowOpen;
-				pi.sendMessage(
-					{
-						customType: "main-wip",
-						display: true,
-						content:
-							`【main-wip】这些文件还有未提交改动，但它们正在 cmux 里打开：${busy.join("、")}。\n` +
-							`你在看或编辑它们，因此自动建 worktree → 提交 → PR 的流程已暂停（否则你会看到文件内容被自动改动）。\n` +
-							`要提交时：先关掉对应的文件页面（或切到别的文章），再说一声提交即可。`,
-					},
-					{ deliverAs: "followUp" },
-				);
-				return;
+				dbg(`opened in cmux (continue kick): ${busy.join(", ")}`);
 			}
 
 			const now = Date.now();
