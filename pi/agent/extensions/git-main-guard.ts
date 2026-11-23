@@ -44,6 +44,9 @@ const VISIBILITY_TTL_MS = 24 * 60 * 60 * 1000;
 
 const SEGMENT_SPLIT = /&&|\|\||;|\n|\|/;
 const GIT_SEGMENT = /^git(?=\s|$)/;
+// 命令前的环境变量赋值（`PA_MERGE_GATE=1 git push ...`、`FOO="a b" git ...`）：
+// 这类前缀会把整段开头的 `git` 推到第二个 token——不剥掉就绕过全部检查（2026-11-23 实测发现）。
+const ENV_PREFIX = /^(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S*)[ \t]+)+/;
 const MAIN_BRANCHES = new Set(["main", "master"]);
 
 const PUSH_DENY =
@@ -188,7 +191,7 @@ export default function (pi: ExtensionAPI) {
 
 			const cwd = process.cwd();
 			for (const raw of command.split(SEGMENT_SPLIT)) {
-				const segment = raw.trim();
+				const segment = raw.trim().replace(ENV_PREFIX, "");
 				if (!GIT_SEGMENT.test(segment)) continue;
 
 				const subcommand = /^git(?:\s+-C\s+(?:"[^"]+"|'[^']+'|\S+)|\s+--\S+)*\s+([a-z-]+)/.exec(segment)?.[1];

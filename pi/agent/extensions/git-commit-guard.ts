@@ -29,12 +29,14 @@ const AUTH_MARK = "AI_AUTHORIZED_COMMIT";
 // 只匹配 git commit 本体（含 git -C <path> commit 形态与带 -m 等子选项的形式）；
 // 不匹配 git log --grep=commit、git checkout 等非 commit 子命令。
 const SEGMENT_SPLIT = /&&|\|\||;|\n|\|/;
+// 命令前的环境变量赋值（`FOO=1 git ...`）：不剥掉就把 `git` 推到第二个 token，整段检查被绕过。
+const ENV_PREFIX = /^(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S*)[ \t]+)+/;
 const GIT_COMMIT_SEGMENT = /^git(?:\s+-\S+(?:\s+[^\s-][^\s]*)?)*\s+commit(?![A-Za-z0-9_-])/;
 const GATE_PATH = join(homedir(), ".pi", "agent", "state", "commit-gate.json");
 
 /** 命令里是否存在「以 git 开头且子命令为 commit」的命令段。 */
 function hasGitCommit(command: string): boolean {
-	return command.split(SEGMENT_SPLIT).some((seg) => GIT_COMMIT_SEGMENT.test(seg.trim()));
+	return command.split(SEGMENT_SPLIT).some((seg) => GIT_COMMIT_SEGMENT.test(seg.trim().replace(ENV_PREFIX, "")));
 }
 
 /** 闸门是否开着（文件在、能解析、未过期）。任何异常都按「关闭」处理。 */

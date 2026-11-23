@@ -121,7 +121,7 @@ function candidatePaths(command: string, cwd: string): string[] {
 		return p.startsWith("/") ? norm(p) : norm(join(cwd, p));
 	};
 	for (const rawSeg of command.split(/&&|\|\||;|\n|\|/)) {
-		const seg = rawSeg.trim();
+		const seg = rawSeg.trim().replace(ENV_PREFIX, "");
 		if (!seg) continue;
 		const cd = /^cd\s+(.+)$/.exec(seg);
 		if (cd) out.add(toAbs(cd[1].split(/\s+/)[0]));
@@ -135,11 +135,13 @@ function candidatePaths(command: string, cwd: string): string[] {
 
 // 只在「以 git 开头的命令段」里认 add 子命令，避免文档 / echo 文本误判。
 const SEGMENT_SPLIT = /&&|\|\||;|\n|\|/;
+// 命令前的环境变量赋值（`FOO=1 git ...`）：不剥掉就把 `git` 推到第二个 token，整段检查被绕过。
+const ENV_PREFIX = /^(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S*)[ \t]+)+/;
 const GIT_ADD_SEGMENT = /^git(?:\s+-\S+(?:\s+[^\s-][^\s]*)?)*\s+add(?![A-Za-z0-9_-])/;
 
 /** 命令里是否有 git add 段。 */
 function hasGitAdd(command: string): boolean {
-	return command.split(SEGMENT_SPLIT).some((seg) => GIT_ADD_SEGMENT.test(seg.trim()));
+	return command.split(SEGMENT_SPLIT).some((seg) => GIT_ADD_SEGMENT.test(seg.trim().replace(ENV_PREFIX, "")));
 }
 
 /** 用户当轮是否明确要求 add（要提交当然也可以先 add）。 */

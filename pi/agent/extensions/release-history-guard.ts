@@ -28,6 +28,8 @@ import { isToolCallEventType, type ExtensionAPI } from "@earendil-works/pi-codin
 const MARK = "AI_AUTHORIZED_RELEASE_HISTORY";
 
 const SEGMENT_SPLIT = /&&|\|\||;|\n|\|/;
+// 命令前的环境变量赋值（`FOO=1 git ...`）：不剥掉就把 `git` 推到第二个 token，整段检查被绕过。
+const ENV_PREFIX = /^(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S*)[ \t]+)+/;
 const GIT_SEGMENT = /^git(?=\s|$)/;
 
 const DENY =
@@ -106,7 +108,7 @@ export default function (pi: ExtensionAPI) {
 
 			const cwd = process.cwd();
 			for (const raw of command.split(SEGMENT_SPLIT)) {
-				const segment = raw.trim();
+				const segment = raw.trim().replace(ENV_PREFIX, "");
 				if (!segment) continue;
 
 				// gh release delete / delete-asset：删除 Release 或其资产属于改写发版历史。
