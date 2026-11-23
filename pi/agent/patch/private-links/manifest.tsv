@@ -29,8 +29,9 @@ GrowthMarketerAgent	assets/avatar
 GrowthMarketerAgent	assets/listing
 GrowthMarketerAgent	backup
 GrowthMarketerAgent	video-monetization
-quant-agent	Intraday/TODO.local.md
-quant-agent	Intraday/TODO-archive.local.md
+Intraday	TODO.local.md
+Intraday	TODO-archive.local.md
+Intraday	DATA-LOCATION.local.md
 LegalAgent	CHANGELOG.local.md
 LegalAgent	TODO.local.md
 LegalAgent	product-research
