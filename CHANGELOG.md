@@ -13,6 +13,25 @@
 
 - **镜像同步（2026-11-23）**：从全局 `~/.pi/agent` 单向发布。
   **为什么改**：全局能力层有改动，本仓库是它的开源镜像，必须保持一致。
+  **改了什么**：14 个文件——
+  - `pi/agent/AGENTS.md`
+  - `pi/agent/docs/agents-registry.md`
+  - `pi/agent/docs/capability-sync.md`
+  - `pi/agent/docs/macmini-mirror.md`
+  - `pi/agent/docs/pi-alt-team.md`
+  - `pi/agent/extensions/git-main-guard.ts`
+  - `pi/agent/patch/agents-infra-publish/README.md`
+  - `pi/agent/patch/agents-infra-publish/publish.py`
+  - `pi/agent/patch/macmini-mirror/setup.py`
+  - `pi/agent/patch/macmini-mirror/stignore-pi-alt`
+  - `pi/agent/skills/commit/SKILL.md`
+  - `pi/agent/skills/dev-workflow/SKILL.md`
+  - `pi/agent/skills/release/SKILL.md`
+  - `pi/agent/patch/pa-workflow/`
+  **回归风险**：无（只同步内容，不改本仓库自身逻辑）。
+
+- **镜像同步（2026-11-23）**：从全局 `~/.pi/agent` 单向发布。
+  **为什么改**：全局能力层有改动，本仓库是它的开源镜像，必须保持一致。
   **改了什么**：2 个文件——
   - `pi/agent/docs/agents-registry.md`
   - `pi/agent/patch/private-links/manifest.tsv`

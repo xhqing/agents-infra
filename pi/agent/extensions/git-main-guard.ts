@@ -20,15 +20,27 @@
  * - commit：命令末尾 `# AI_AUTHORIZED_COMMIT_MAIN`
  * - add：命令末尾 `# AI_AUTHORIZED_ADD_MAIN`
  *
+ * 另有「门禁授权」（2026-11-23 统一公开 / 私有工作流时加）：私有仓库的 main 由本地门禁
+ * `pa-merge.sh` 合入，它用 `PA_MERGE_GATE=1 git push origin HEAD:main`。这种形态属于
+ * 「门禁已跑过」而不是「用户授权」，所以单独认 `PA_MERGE_GATE=1`——但**只对已确认私有的仓库**
+ * 生效（公开仓库仍须用户授权标记），可见性查不到时按不放行处理（fail-closed）。
+ *
  * 判定失败时 fail-open（与其它守卫一致）：守卫失灵不阻塞会话。
  */
 
 import { execFileSync } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { isToolCallEventType, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const PUSH_MARK = "AI_AUTHORIZED_PUSH_MAIN";
 const COMMIT_MARK = "AI_AUTHORIZED_COMMIT_MAIN";
 const ADD_MARK = "AI_AUTHORIZED_ADD_MAIN";
+const PA_GATE_MARK = "PA_MERGE_GATE=1";
+
+const VISIBILITY_CACHE = join(homedir(), ".pi", "agent", "state", "repo-visibility.json");
+const VISIBILITY_TTL_MS = 24 * 60 * 60 * 1000;
 
 const SEGMENT_SPLIT = /&&|\|\||;|\n|\|/;
 const GIT_SEGMENT = /^git(?=\s|$)/;
@@ -52,6 +64,8 @@ const ADD_DENY =
 	"确需在 main 上 add 时须用户当轮明确授权，并在命令末尾加 `# AI_AUTHORIZED_ADD_MAIN`。";
 
 type RepoContext = { dir: string; branch: string; isGitHub: boolean };
+type Visibility = "private" | "public" | "unknown";
+type VisibilityCache = Record<string, { visibility?: string; checked?: number }>;
 
 function execGit(dir: string, args: string[]): string | null {
 	try {
@@ -71,6 +85,57 @@ function repoDirFromSegment(segment: string, fallback: string): string {
 	const dir = match?.[2] ?? match?.[3] ?? match?.[4];
 	if (!dir) return fallback;
 	return dir.replace(/^~(?=\/|$)/, process.env.HOME ?? "~");
+}
+
+/** 远端 origin 的 GitHub `owner/repo`；不是 GitHub 远端时返回 null。 */
+function remoteSlug(dir: string): string | null {
+	const url = execGit(dir, ["remote", "get-url", "origin"]);
+	if (!url || !/github\.com[:/]/.test(url)) return null;
+	const slug = url
+		.replace(/^git@[^:]*:/, "")
+		.replace(/^https?:\/\/[^/]*\//, "")
+		.replace(/\.git$/, "")
+		.replace(/\/+$/, "");
+	const parts = slug.split("/");
+	return parts.length === 2 && parts.every(Boolean) ? slug : null;
+}
+
+function readVisibilityCache(): VisibilityCache {
+	try {
+		const parsed: unknown = JSON.parse(readFileSync(VISIBILITY_CACHE, "utf8"));
+		return parsed && typeof parsed === "object" ? (parsed as VisibilityCache) : {};
+	} catch {
+		return {};
+	}
+}
+
+/** 仓库可见性（本地缓存 1 天，未命中查 gh；查不到返回 unknown）。 */
+function repoVisibility(dir: string): Visibility {
+	const slug = remoteSlug(dir);
+	if (!slug) return "unknown";
+	const cache = readVisibilityCache();
+	const hit = cache[slug];
+	if (hit?.visibility && Date.now() - (hit.checked ?? 0) < VISIBILITY_TTL_MS) {
+		return hit.visibility as Visibility;
+	}
+	let visibility: Visibility = "unknown";
+	try {
+		const out = execFileSync("gh", ["api", `repos/${slug}`, "--jq", ".private"], {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"],
+			timeout: 8000,
+		}).trim();
+		visibility = out === "true" ? "private" : out === "false" ? "public" : "unknown";
+	} catch {
+		visibility = "unknown";
+	}
+	try {
+		cache[slug] = { visibility, checked: Date.now() };
+		writeFileSync(VISIBILITY_CACHE, `${JSON.stringify(cache, null, 2)}\n`, "utf8");
+	} catch {
+		// 写缓存失败不影响判定
+	}
+	return visibility;
 }
 
 function repoContext(segment: string, cwd: string): RepoContext | null {
@@ -149,6 +214,8 @@ export default function (pi: ExtensionAPI) {
 				}
 
 				if (targetsMain(pushTokens(segment), context.branch)) {
+					// 门禁授权：只对已确认私有的仓库生效（公开仓库仍须用户授权标记）
+					if (command.includes(PA_GATE_MARK) && repoVisibility(context.dir) === "private") continue;
 					return { block: true, reason: PUSH_DENY };
 				}
 			}

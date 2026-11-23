@@ -3,8 +3,8 @@
 
 用法：python3 setup.py
 - 本机（MacBook Air，arm64）与 macmini（Intel，x64）各跑一个 Syncthing 守护进程；
-- 三个共享目录：~/.pi/agent（全局能力层）、~/.dev/private（私有本体）、
-  ~/.pi-alt（pi-alt-team 权威源，双向）；
+- 两个共享目录：~/.pi/agent（全局能力层）、~/.dev/private（私有本体）；
+  2026-11-23 起 `~/.pi-alt` 已退役（双身份取消），不再建这层同步，旧的用 `--drop-pi-alt` 移除。
 - 排除项写在各自目录根的 .stignore（见同目录 stignore-* 模板）。
 
 说明：本脚本只负责「建配置」，不改已存在目录的设置（幂等，可重复执行）。
@@ -156,6 +156,7 @@ def drop_folder(base, key, fid, remote):
 
 def main():
     drop_dev = "--drop-developer" in sys.argv
+    drop_pi_alt = "--drop-pi-alt" in sys.argv
     with_dev = "--with-developer" in sys.argv
     lk = local_key()
     rk = remote_key()
@@ -165,8 +166,8 @@ def main():
 
     print("== 本机 ==")
     ensure_device(LOCAL, lk, rid, "Macs-Mac-mini", f"tcp://{REMOTE_IP}:22000", False)
-    stignore_pi_alt = Path(__file__).with_name("stignore-pi-alt")
-    ensure_stignore("/Users/xhq/.pi-alt", stignore_pi_alt)
+    stignore_pi_agent = Path(__file__).with_name("stignore-pi-agent")
+    ensure_stignore("/Users/xhq/.pi/agent", stignore_pi_agent)
     if with_dev:  # 2026-11-05 起代码走 GitHub，只有显式 --with-developer 才重建这层同步
         ensure_folder(LOCAL, lk, folder_spec(
             "developer", "Developer (team mirror)", "/Users/xhq/Developer",
@@ -177,13 +178,10 @@ def main():
     ensure_folder(LOCAL, lk, folder_spec(
         "private", "私有内容本体（~/.dev/private）", "/Users/xhq/.dev/private",
         [lid, rid], "/Users/xhq/.syncthing-versions/private"), False)
-    ensure_folder(LOCAL, lk, folder_spec(
-        "pi-alt", "pi-alt home (team mirror)", "/Users/xhq/.pi-alt",
-        [lid, rid], "/Users/xhq/.syncthing-versions/pi-alt"), False)
 
     print("== macmini ==")
     ensure_device(LOCAL, rk, lid, "MacBook-Air-xhq", f"tcp://{LOCAL_IP}:22000", True)
-    ensure_stignore("/Users/mac/.pi-alt", stignore_pi_alt, remote=True)
+    ensure_stignore("/Users/mac/.pi/agent", stignore_pi_agent, remote=True)
     if with_dev:
         ensure_folder(LOCAL, rk, folder_spec(
             "developer", "Developer (team mirror)", "/Users/mac/Developer",
@@ -194,14 +192,15 @@ def main():
     ensure_folder(LOCAL, rk, folder_spec(
         "private", "私有内容本体（~/.dev/private）", "/Users/mac/.dev/private",
         [rid, lid], "/Users/mac/.syncthing-versions/private"), True)
-    ensure_folder(LOCAL, rk, folder_spec(
-        "pi-alt", "pi-alt home (team mirror)", "/Users/mac/.pi-alt",
-        [rid, lid], "/Users/mac/.syncthing-versions/pi-alt"), True)
 
     if drop_dev:
         print("== 移除 developer 共享（代码改走 GitHub）==")
         drop_folder(LOCAL, lk, "developer", False)
         drop_folder(LOCAL, rk, "developer", True)
+    if drop_pi_alt:
+        print("== 移除 pi-alt 共享（双身份已退役）==")
+        drop_folder(LOCAL, lk, "pi-alt", False)
+        drop_folder(LOCAL, rk, "pi-alt", True)
     print("== 完成 ==")
 
 

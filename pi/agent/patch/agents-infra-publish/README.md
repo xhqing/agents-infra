@@ -5,7 +5,7 @@
 ## 一句话
 
 把 `~/.pi/agent`（五部分 + npm 清单）单向发布到 `agents-infra/pi/agent/`，**只在本机（MacBook）上跑**。
-只发布 `pi/agent/` 一个子树。pi-alt-team（`~/.pi-alt/`）是私有团队，规则与配置不进 agents-infra，只走 Syncthing `pi-alt` 文件夹双机同步。
+只发布 `pi/agent/` 一个子树。**镜像范围只由「它是不是全局能力层」决定，与仓库可见性无关**：私有仓库的代码 / 数据 / 结论永远不会被带进镜像（2026-11-23 双身份取消后，这条是唯一的隔离依据）。
 
 发布机于 2026-11-16 从 macmini 迁回本机（用户决定：agents-infra 只在本机同步与 PR），
 macmini 上的该仓库副本已删除；脚本在 macmini 上跑会直接拒绝。
@@ -37,13 +37,12 @@ python3 ~/.pi/agent/patch/agents-infra-publish/publish.py --dry-run  # 看会改
 
 清单在 `publish.py` 的 `EXCLUDES`，与 `docs/capability-sync.md` 第四节必须保持一致。
 
-## 私有团队（pi-alt-team）
+## 私有内容怎么隔离
 
-`~/.pi-alt/` 是 pi-alt-team 的权威源（双机双向同步，Syncthing folder id `pi-alt`）。
-它是私有团队，**不进 agents-infra 镜像**——`publish.py` 只管 `pi/agent/`。
-
-pi-alt 的身份实现（brand 目录 + wrapper）与验收标准见 `pi-harness` 仓库 Issue #64，
-架构说明见 `docs/pi-alt-team.md`。
+- 镜像源只有 `~/.pi/agent`，**私有仓库（代码 / 数据 / 结论 / 客户 / 账户）不在源里**，不因可见性而放宽。
+- 本机私有部分（`sessions/`、`state/`、`logs/`、`npm/`、`bin/`、`trust.json` 等）由 `EXCLUDES` 排除。
+- 发布前闸门：可见性判定 + gitleaks + 私有项目名 grep（私有项目只允许「名字 + 链接」出现在公开面）。
+- 沿革：2026-11-23 前私有项目归 `pi-alt` 身份（`~/.pi-alt`），双身份已取消，历史见 `docs/pi-alt-team.md`。
 
 ## 失败排查
 

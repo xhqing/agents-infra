@@ -5,6 +5,8 @@ description: "打 tag 发布版本：读取版本号与 CHANGELOG，打带注释
 
 # Auto Tag & GitHub Release
 
+> **私有仓库不走本 skill（2026-11-23 起）**：私有仓库没有 PR 门禁，发版必须经过本地合并门禁，改用 `~/.pi/agent/patch/pa-workflow/pa-release.sh patch|minor|major`（bump → 分支 → 门禁 → tag → Release；详见 dev-workflow「私有仓库路径」节）。本 skill 只服务公开仓库。
+
 当用户输入 `release`（或「打 tag 发布」「发版」）时，**或由 commit skill 第 10 步自动衔接时**（2026-10-02 用户立，见下方「授权语义」），读取当前项目版本号与 CHANGELOG，**依次执行 `git tag -a` → `git push origin <tag>` → `gh release create`**，打带注释的 git tag、推送到远程、创建 GitHub Release（含 Release notes；构建产物按项目声明——声明要产物的项目构建上传，未声明默认不带）。
 
 ## 授权语义（对应「下次不问」）
