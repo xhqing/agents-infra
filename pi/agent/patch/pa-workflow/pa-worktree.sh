@@ -15,6 +15,9 @@
 set -uo pipefail
 
 PI_BIN="${PA_PI_BIN:-pi}"
+# --repo <路径>：允许从仓库外调用（否则按当前目录判定仓库）
+if [ "${1:-}" = "--repo" ]; then PA_REPO="${2:?--repo 需要路径}"; shift 2; fi
+if [ -n "${PA_REPO:-}" ]; then cd "$PA_REPO" || exit 1; fi
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "❌ 不在 git 仓库里" >&2; exit 1; }
 cd "$REPO_ROOT" || exit 1
 REPO_NAME="$(basename "$REPO_ROOT")"
