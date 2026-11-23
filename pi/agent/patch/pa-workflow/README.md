@@ -25,8 +25,9 @@ pa-merge.sh <分支名>                  # 干跑：在最新 origin/main 上合
 pa-merge.sh <分支名> --push            # 全过才合入 main，并快进 local main
 pa-merge.sh <分支名> --push --shared   # 允许改共用文件（Leader 自己改基础代码时用）
 
-pa-worktree.sh <slug> [--task <任务卡>] [--no-start]   # 一任务一工作树（../<仓库名>-<slug>）
+pa-worktree.sh <slug> [--task <任务卡>] [--no-start]   # 一任务一工作树（../<仓库名>-<slug>），在仓库目录里跑
 pa-worktree.sh --rm <slug>                             # 回收工作树（分支保留）
+# 从仓库外调用：以上命令都可加 --repo <仓库路径>（与 pa-merge.sh 一致）
 
 pa-release.sh patch|minor|major [--no-push]            # bump → 分支 → 门禁 → tag → Release
 ```
