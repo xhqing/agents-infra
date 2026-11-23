@@ -122,7 +122,7 @@ function candidatePaths(command: string, cwd: string): string[] {
 		return p.startsWith("/") ? norm(p) : norm(join(cwd, p));
 	};
 	for (const rawSeg of command.split(/&&|\|\||;|\n|\|/)) {
-		const seg = rawSeg.trim();
+		const seg = rawSeg.trim().replace(ENV_PREFIX, "");
 		if (!seg) continue;
 		const cd = /^cd\s+(.+)$/.exec(seg);
 		if (cd) out.add(toAbs(cd[1].split(/\s+/)[0]));
@@ -136,11 +136,13 @@ function candidatePaths(command: string, cwd: string): string[] {
 
 // 只在「以 git 开头的命令段」里认 commit 子命令，避免文档 / echo 文本误判。
 const SEGMENT_SPLIT = /&&|\|\||;|\n|\|/;
+// 命令前的环境变量赋值（`FOO=1 git ...`）：不剥掉就把 `git` 推到第二个 token，整段检查被绕过。
+const ENV_PREFIX = /^(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S*)[ \t]+)+/;
 const GIT_COMMIT_SEGMENT = /^git(?:\s+-\S+(?:\s+[^\s-][^\s]*)?)*\s+commit(?![A-Za-z0-9_-])/;
 
 /** 命令里是否有 git commit 段。 */
 function hasGitCommit(command: string): boolean {
-	return command.split(SEGMENT_SPLIT).some((seg) => GIT_COMMIT_SEGMENT.test(seg.trim()));
+	return command.split(SEGMENT_SPLIT).some((seg) => GIT_COMMIT_SEGMENT.test(seg.trim().replace(ENV_PREFIX, "")));
 }
 
 /** 用户当轮是否明确要求提交（commit / 发版类意图；单独的 add 意图不算）。 */

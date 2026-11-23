@@ -50,6 +50,8 @@ const AUTH_MARK = "AI_AUTHORIZED_COMMIT";
 // 2026-10-04 收紧：按 && / || / ; / | / 换行 切分命令段，只认「以 git 开头的命令段」——
 // 此前用全文包含式匹配，文档 / 测试用例 / echo 文本里的 "git commit" 会把守卫误触发。
 const SEGMENT_SPLIT = /&&|\|\||;|\n|\|/;
+// 命令前的环境变量赋值（`FOO=1 git ...`）：不剥掉就把 `git` 推到第二个 token，整段检查被绕过。
+const ENV_PREFIX = /^(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S*)[ \t]+)+/;
 const GIT_COMMIT_SEGMENT = /^git(?:\s+-\S+(?:\s+[^\s-][^\s]*)?)*\s+commit(?![A-Za-z0-9_-])/;
 // 最终回复里的 status 代码块：``` [语言标注] 换行 >> git status 换行 输出体 ```
 const STATUS_BLOCK = /```[^\n]*\n>> git status\n([\s\S]*?)```/;
@@ -68,7 +70,7 @@ const REPLACED_NOTE =
 
 /** 命令里是否存在「以 git 开头且子命令为 commit」的命令段（与 git-commit-guard.ts 同源）。 */
 function hasGitCommit(command: string): boolean {
-	return command.split(SEGMENT_SPLIT).some((seg) => GIT_COMMIT_SEGMENT.test(seg.trim()));
+	return command.split(SEGMENT_SPLIT).some((seg) => GIT_COMMIT_SEGMENT.test(seg.trim().replace(ENV_PREFIX, "")));
 }
 
 function isAuthorizedCommit(command: string): boolean {
@@ -124,7 +126,7 @@ function canonicalTarget(raw: string, cwd: string): string {
 function commandTargets(command: string, cwd: string): string[] {
 	const out: string[] = [];
 	for (const raw of command.split(SEGMENT_SPLIT)) {
-		const seg = raw.trim();
+		const seg = raw.trim().replace(ENV_PREFIX, "");
 		if (!seg) continue;
 		const cd = /^cd\s+(.+)$/.exec(seg);
 		if (cd) out.push(canonicalTarget(cd[1].split(/\s+/)[0], cwd));
