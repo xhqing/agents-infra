@@ -2,7 +2,7 @@
 
 > 本文件由全局 `~/.pi/agent/AGENTS.md`「团队结构参考」指针节指向。**何时读**：新建 Agent 项目前（名称查重）、判断某子任务该移交给哪个 agent 时、新增 / 变更 Agent 或子项目的注册信息时。权威源在全局 `~/.pi/agent/docs/`，开源镜像在 agents-infra 仓库 `pi/agent/docs/`。
 
-**pi-alt-team（闭源团队，2026-11-11 用户立；2026-11-15 起用 `pi-alt` 身份运行）默认不在本注册表登记**：其项目、私有仓库、名称与职责不进入本文件、`xhqing` 公开名册与 `agents-infra` 镜像；**例外**：用户明确要求只列名与链接的私有子项目（当前：NewsScoreStudy），按专项指示登记、不介绍内容。pi-team 与 pi-alt-team 完全独立，互不引用。
+**pi-alt-team（闭源团队，2026-11-11 用户立；2026-11-15 起用 `pi-alt` 身份运行）默认不在本注册表登记**：其项目、私有仓库、名称与职责不进入本文件、`xhqing` 公开名册与 `agents-infra` 镜像；**例外**：用户明确要求只列名与链接的私有子项目（当前：NewsScoreStudy、hyperliquid-research-trial），按专项指示登记、不介绍内容。pi-team 与 pi-alt-team 完全独立，互不引用。
 
 ## 智能体命名注册表（避免重名 + 跨 agent 推荐）
 
@@ -112,8 +112,9 @@
 | trading-agent（Victor） | TradingProofs | 交易数学的 Lean 4 + Mathlib 机器可验证证明（从固定比例下注的累计收益率推导开始，覆盖强数定律指数增长率 / 凯利最优 f\* /「两倍凯利」边界；与实盘执行完全隔离，2026-10-11 立项） |
 | social-agent（Gatsby） | blog | 个人博客「藏经阁」（docsify 站点，<https://xhqing.github.io/blog>；GitHub Pages 直接从 `main` 的 `docs/` 发布）。**2026-11-11 由 Kit（assistant-agent）移交 Gatsby**，同日从「已退役子项目」名单里恢复为活跃。内容双通道：手写，加上从 social-agent 的 `docs/articles/` 每 10 分钟自动同步——**不看写完没写完**，源仓库什么状态博客就什么状态；同步产物带 `<!-- source: … -->` 标记，机器人跑完自检后直推 `main`（用过 `GITHUB_TOKEN` 建 PR 触发不了别的 workflow，所以不走 PR） |
 | quant-agent（Mark） | NewsScoreStudy | 私有子项目（2026-11-12 重新登记）；只列名与链接，不介绍内容 |
+| quant-agent（Mark） | hyperliquid-research-trial | 私有子项目（2026-11-23 登记，经 Issue #37 由 Mark 提出）；只列名与链接，不介绍内容 |
 
-> **Mark（quant-agent）名下的仓库构成（2026-11-12）**：原 Intraday / Swing / gridtrader 三个子项目仓库已并入 Mark 仓库，成为 `Intraday/`、`Swing/`、`gridtrader/` 三个目录（各自带自己的 `AGENTS.md`；并入按 squash 落地成单个提交，**原仓库的完整提交历史保留在三个 GitHub 存档仓库里**）；另有私有子项目 **NewsScoreStudy**（独立 private 仓库，只列名与链接，不介绍内容）。
+> **Mark（quant-agent）名下的仓库构成（2026-11-23）**：原 Intraday / Swing / gridtrader 三个子项目仓库已并入 Mark 仓库，成为 `Intraday/`、`Swing/`、`gridtrader/` 三个目录（各自带自己的 `AGENTS.md`；并入按 squash 落地成单个提交，**原仓库的完整提交历史保留在三个 GitHub 存档仓库里**）；另有私有子项目 **NewsScoreStudy** 与 **hyperliquid-research-trial**（均为独立 private 仓库，只列名与链接，不介绍内容）。
 
 - **已注销 / 已退役的 Agent**：**Hermes**（NetOpsAgent，2026-10-26 用户决定）——原网络运维管理员，唯一子项目 XPilot 已移交 Atlas（dev-agent），项目本体退役、不再作为活跃 Agent 维护（GitHub 仓库 `xhqing/NetOpsAgent` 保留为存档；本地目录已于 2026-10-31 按用户要求删除）。
 - **已除名的 Agent（2026-11-18 用户决定）**：**cuAgent**（cuAgent，电脑操作员）——用户要求「取消 cuAgent 这个智能体，从名单中撤销」，同时把 **computer-use 能力装进 pi 全局**（`~/.pi/agent/mcp-adapter.json` 的 `open-computer-use` + `extensions/computer-use-guard.ts`）。职责移交方式：**能力上收到全局层**——任何 agent 都能用，规则改为「**本机使用需用户当次授权、macmini 直接可用**」（2026-11-18 用户立，详见全局 `AGENTS.md` 的「电脑操作（computer-use）」节）。项目本体退役、不再作为活跃 Agent 维护，GitHub 仓库 `xhqing/cuAgent` 保留为存档；原项目级 `.mcp.json` 与 `.pi/extensions/computer-use-guard.ts` 由项目自行清理。
