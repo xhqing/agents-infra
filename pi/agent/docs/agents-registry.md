@@ -113,8 +113,12 @@
 | social-agent（Gatsby） | blog | 个人博客「藏经阁」（docsify 站点，<https://xhqing.github.io/blog>；GitHub Pages 直接从 `main` 的 `docs/` 发布）。**2026-11-11 由 Kit（assistant-agent）移交 Gatsby**，同日从「已退役子项目」名单里恢复为活跃。内容双通道：手写，加上从 social-agent 的 `docs/articles/` 每 10 分钟自动同步——**不看写完没写完**，源仓库什么状态博客就什么状态；同步产物带 `<!-- source: … -->` 标记，机器人跑完自检后直推 `main`（用过 `GITHUB_TOKEN` 建 PR 触发不了别的 workflow，所以不走 PR） |
 | quant-agent（Mark） | NewsScoreStudy | 私有子项目（2026-11-12 重新登记）；只列名与链接，不介绍内容 |
 | quant-agent（Mark） | hyperliquid-research-trial | 私有子项目（2026-11-23 登记，经 Issue #37 由 Mark 提出）；只列名与链接，不介绍内容 |
+| quant-agent（Mark） | Intraday | 公开子项目：日内尺度策略研究（订单流 mbo 特征、分钟级 ML 信号、walk-forward 验证、执行口径模拟）。2026-11-08 曾并入 quant-agent 成为目录，**2026-11-23 抽回为独立仓库** |
+| quant-agent（Mark） | Swing | 公开子项目：日 K 趋势跟随策略工具集（美股大盘股，完整文档 + 回测验证 + 可信度标定）。2026-11-08 曾并入 quant-agent，**2026-11-23 抽回为独立仓库** |
+| quant-agent（Mark） | gridtrader | 公开子项目：网格交易策略开发及回测工具（Python / backtrader / Pipenv）。2026-11-08 曾并入 quant-agent，**2026-11-23 抽回为独立仓库**；默认分支原为 `master`，2026-11-23 一并改名为 `main` |
+| quant-agent（Mark） | market-data-backup | 私有子项目（Mark 早期建立）：行情数据快照仓——美股 tick / 订单簿（Databento mbo）、富途 / 长桥分钟 K + 日 K、A 股 ETF 快照都挂在 GitHub Release 上，仓库本体只有说明；下载 / 上传由各项目的 `data.py` 走 `gh release` 完成。不是软件项目，是数据仓 |
 
-> **Mark（quant-agent）名下的仓库构成（2026-11-23）**：原 Intraday / Swing / gridtrader 三个子项目仓库已并入 Mark 仓库，成为 `Intraday/`、`Swing/`、`gridtrader/` 三个目录（各自带自己的 `AGENTS.md`；并入按 squash 落地成单个提交，**原仓库的完整提交历史保留在三个 GitHub 存档仓库里**）；另有私有子项目 **NewsScoreStudy** 与 **hyperliquid-research-trial**（均为独立 private 仓库，只列名与链接，不介绍内容）。
+> **Mark（quant-agent）名下的仓库构成（2026-11-23）**：Intraday / Swing / gridtrader 于**2026-11-08 并入** Mark 仓库成为三个目录（squash 成单个提交），又于**2026-11-23 按用户要求抽回为独立仓库**——两段历史都在三个仓库各自的提交记录里，不需要再去外部存档找。另有私有子项目 **NewsScoreStudy**、**hyperliquid-research-trial**、**market-data-backup**（独立 private 仓库；前两个只列名与链接、不介绍内容）。
 
 - **已注销 / 已退役的 Agent**：**Hermes**（NetOpsAgent，2026-10-26 用户决定）——原网络运维管理员，唯一子项目 XPilot 已移交 Atlas（dev-agent），项目本体退役、不再作为活跃 Agent 维护（GitHub 仓库 `xhqing/NetOpsAgent` 保留为存档；本地目录已于 2026-10-31 按用户要求删除）。
 - **已除名的 Agent（2026-11-18 用户决定）**：**cuAgent**（cuAgent，电脑操作员）——用户要求「取消 cuAgent 这个智能体，从名单中撤销」，同时把 **computer-use 能力装进 pi 全局**（`~/.pi/agent/mcp-adapter.json` 的 `open-computer-use` + `extensions/computer-use-guard.ts`）。职责移交方式：**能力上收到全局层**——任何 agent 都能用，规则改为「**本机使用需用户当次授权、macmini 直接可用**」（2026-11-18 用户立，详见全局 `AGENTS.md` 的「电脑操作（computer-use）」节）。项目本体退役、不再作为活跃 Agent 维护，GitHub 仓库 `xhqing/cuAgent` 保留为存档；原项目级 `.mcp.json` 与 `.pi/extensions/computer-use-guard.ts` 由项目自行清理。
