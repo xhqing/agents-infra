@@ -66,13 +66,13 @@ python3 ~/.pi/agent/patch/agents-infra-publish/publish.py --dry-run  # 看会改
 | `extensions/` | `pi/agent/extensions/` | 工具强制类扩展 |
 | `npm/`（清单） | `pi/agent/npm/` | `package.json` / `package-lock.json` + `PACKAGES.md`（`patch/npm-manifest/refresh.py` 生成） |
 
-**镜像只有这一个子树**：`pi/agent/`。pi-alt-team（`~/.pi-alt/`）是私有团队，规则与配置**不进 agents-infra**，只走 Syncthing `pi-alt` 文件夹双机同步。
+**镜像只有这一个子树**：`pi/agent/`。镜像范围只由「它是不是全局能力层」决定，**与仓库可见性无关**：私有仓库（及其代码 / 数据 / 结论）永远不会因为「自己人要用」而被带进镜像——镜像只来自 `~/.pi/agent`。
 
 仓库根的 `apps/` 不在 `publish.py` 的范围：它不来自全局目录、脚本也不写它（只 rsync `pi/agent/` 并清理该目录下的孤儿条目）。`apps/` 是另一套镜像：权威源是 `~/.config/…` 下生效的文件，`apps/publish.sh` 收集、`apps/install.sh` 部署、`apps/check.sh` 比对；不建软链（App 的原子写会把链接默默换成普通文件）。细则见 `apps/README_cn.md`。
 
 **不进镜像**：
 
-- `~/.pi-alt/` 整体不进镜像（私有团队）：凭证、会话、`sessions/`、`state/`、`logs/`、`node_modules/`
+- **私有仓库的业务内容**：代码、数据、结论、客户 / 账户 / 报价——只留在私有仓库本身，任何情况下不进镜像（与「可见性」无关，是镜像范围本身就只有全局能力层）
 - 运行时与架构相关：`sessions/`、`state/`、`logs/`、`tmp/`、`intercom/`、`npm/`（包本体）、`bin/`
 - 本机私有配置：`trust.json`、`mcp-project-approvals.json`、`skills/anysearch/runtime.conf`、
   `skills/anysearch/.env`、`skills/backup/endpoints/*`、`patch/session-link/*.json`、`patch/skill-custom/conflicts/*`

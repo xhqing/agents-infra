@@ -1,6 +1,6 @@
 ---
 name: dev-workflow
-description: 软件开发项目的核心功能开发循环（远端 main 分支保护 + 功能分支 + PR + CI 门禁；2026-09-21 三次修订定稿：GitHub Issue 作需求端（fixes #N 合并自动关闭）、测试开发分离 + 测试先行（2026-11-13 起只对 dev-agent 子项目强制：Leader 在实现开工前出测试、先红后绿，Worker 对测试文件全量只读可运行、hook 强制禁止增删改）、CI 绿即 auto-merge 合并（合并由 CI 独裁）、用户验收是过程（装上正式版实际使用，体验即验收）、发版自动衔接（修复合并进 main 后由 bump → add → commit → release 链自动发正式版，不等人工试用）。当用户在软件开发项目上要开发新功能、修 bug、修改核心功能代码，或提到开发工作流、dev-workflow、开分支、建分支、worktree、全量测试、测试用例、测试先行、TDD、PR、CI、Issue、合并回 main、预发布时必须使用——即便项目本身是软件项目，也要先判断这次需求是不是核心开发（判断标准见第 0 步）；项目尚无 Issue 需求记录或尚无测试不是绕过本流程的理由——此时同样必须使用，相应门禁会阻塞并引导补齐。杂事（文档、README、版本号 bump（/bump）、配置调整等不触碰核心功能代码运行行为的改动）不走本流程的测试门禁，但 main 已锁定直推，杂事同样经轻量分支 + PR + CI 进 main。（PR / Issue 文本公开前走敏感自检、public-text-guard 工具强制，2026-10-03 增）
+description: 软件开发项目的核心功能开发循环（远端 main 分支保护 + 功能分支 + PR + CI 门禁；2026-09-21 三次修订定稿：GitHub Issue 作需求端（fixes #N 合并自动关闭）、测试开发分离 + 测试先行（2026-11-13 起只对 dev-agent 子项目强制：Leader 在实现开工前出测试、先红后绿，Worker 对测试文件全量只读可运行、hook 强制禁止增删改）、CI 绿即 auto-merge 合并（合并由 CI 独裁）、用户验收是过程（装上正式版实际使用，体验即验收）、发版自动衔接（修复合并进 main 后由 bump → add → commit → release 链自动发正式版，不等人工试用）。当用户在软件开发项目上要开发新功能、修 bug、修改核心功能代码，或提到开发工作流、dev-workflow、开分支、建分支、worktree、全量测试、测试用例、测试先行、TDD、PR、CI、Issue、合并回 main、预发布时必须使用——即便项目本身是软件项目，也要先判断这次需求是不是核心开发（判断标准见第 0 步）；项目尚无 Issue 需求记录或尚无测试不是绕过本流程的理由——此时同样必须使用，相应门禁会阻塞并引导补齐。杂事（文档、README、版本号 bump（/bump）、配置调整等不触碰核心功能代码运行行为的改动）不走本流程的测试门禁，但 main 已锁定直推，杂事同样经轻量分支 + PR + CI 进 main。**私有仓库**（GitHub Free 没有私有仓 branch protection）同一套纪律走本地门禁：`pa-merge.sh <分支> --push` + 仓库根 `checks.sh`，见「私有仓库路径」节。（PR / Issue 文本公开前走敏感自检、public-text-guard 工具强制，2026-10-03 增）
 ---
 
 # 开发工作流：远端 main 保护 + 测试先行 + PR + CI 门禁（核心开发专用）
@@ -28,6 +28,48 @@ description: 软件开发项目的核心功能开发循环（远端 main 分支�
 项目是软件项目 ≠ 这次需求就是核心开发。每次触发先判断：**改动会不会触碰核心源代码的运行行为**——是则走本流程（行为改动必须有测试锁定，这是回归防护网完备性的底线）；纯文档、README、版本号、格式调整是杂事，走杂事通道：**建 `chore/<事项>` 分支 → 改 → 用户自行 `git add` + `/commit`（push + 建 PR + enable auto-merge）→ CI 绿自动合并**。main 已锁定直推（2026-09-21 起），杂事不再有「main 直改直推」通道，同样经 PR + CI——杂事改动也过回归防护网（防止文档改动意外碰坏东西）。配置类改动按影响判断：改变运行行为的（构建配置、依赖版本）从严走本流程；不改变的当杂事。拿不准时**从严走本流程或直接问用户**，宁重勿漏。
 
 混合需求（核心功能 + 顺带文档）正常走本流程：琐碎文件修改不作为分支的开发目标，但功能开发必须同步的文档（README、CHANGELOG）在分支上顺带改是允许的，不算违规。
+
+## 私有仓库路径（2026-11-23 起：可见性决定路径）
+
+**本 skill 其余各步讲的是公开仓库的 GitHub 路径**（功能分支 + PR + CI + branch protection + auto-merge）。私有仓库拿不到这些服务端能力（GitHub Free 的私有仓库没有 branch protection，实测 `403 Upgrade to GitHub Pro`），所以**同一套纪律换成本地工具强制**。判定只有一条：`gh repo view --json isPrivate`——不看有没有某个目录、也不看是谁的项目。
+
+| 维度 | 公开仓库（其余各步） | 私有仓库（本节） |
+|---|---|---|
+| 禁止直推 main | GitHub branch protection | `pre-push` 守卫（钩子层，任何进程都拦）+ `pa-main-guard.sh` 拦 local main 上的提交 |
+| required checks | required status check | `pa-merge.sh` 在合并后的临时工作树里跑仓库根 `checks.sh`（缺文件拒合） |
+| strict（必须最新 base） | `required_status_checks.strict` | 每次 fetch 后在刚拉下来的 `origin/main` 上合并；push 被拒自动重来（≤3 次） |
+| auto-merge | GitHub auto-merge | `pa-merge.sh --push` 串行合 + 单 pusher（`~/.dev/private/.state/pa-pusher.json`） |
+| 已发布 tag 保护 | 无专门规则 | 守卫拦 tag 移动 / 删除（更严） |
+| 并行开发 | `git worktree add` + 命名守卫 | `pa-worktree.sh <slug>`（建树 + 数据软链 + 信任表 + tmux Worker + 并发上限） |
+| 发版 | `/bump` → `/add` → `/commit` → `/release` | `pa-release.sh patch|minor|major`（bump → 分支 → 门禁 → tag → Release） |
+| 合并可审计 | PR 正文 + CI 链接 | 合并提交正文写 `checks / branch / mode / gate` |
+
+### 怎么做（私有仓库）
+
+```bash
+# 一次性部署（机器级，两台机器各跑一次）
+~/.pi/agent/patch/pa-workflow/pa-install-hooks.sh
+
+# 开工：一个任务一个工作树（目录名仍是 <仓库名>-<事项>）
+~/.pi/agent/patch/pa-workflow/pa-worktree.sh <slug> --task <任务卡>
+
+# 合并：门禁（最新 origin/main + checks.sh）过了才推 main，并快进 local main
+~/.pi/agent/patch/pa-workflow/pa-merge.sh <分支> --push
+
+# 发版
+~/.pi/agent/patch/pa-workflow/pa-release.sh patch
+```
+
+- **项目侧只写一件事**：仓库根 `checks.sh`，声明「检查什么」（跑不动的那一行就是门禁的缺口）；建仓初期可 `PA_ALLOW_NO_CHECKS=1` 临时过，之后必须补。
+- **`/add` 照常走**（敏感扫描在私有仓库同样有用）；提交用 `/commit`，但**私有仓库在第 8 步只推分支、不建 PR、不 enable auto-merge**，合并统一走 `pa-merge.sh <分支> --push`。
+- **不在私有仓库上用 `/release`**（它按公开仓的发版链设计）；发版用 `pa-release.sh`，它不让发版绕过门禁。
+- **仍然适用的纪律**：worktree 命名（`<仓库名>-<事项>`）、本地 main 只用于同步与生成 worktree、一个分支只做一件事、Leader / Worker 分工、`tmp/` 放临时产物、`git -C <worktree>` 前缀。
+
+### 已知限制（诚实）
+
+- 本地钩子可被 `git push --no-verify` 绕过（私有仓库无服务端兜底），靠「单 pusher + 钩子 + 定期审计」近似而非绝防。
+- 没有 PR 审阅页面，用合并提交正文替代。
+- 可见性判定缓存 1 天（`~/.pi/agent/state/repo-visibility.json`）；判不出来（离线 / 无 gh）按私有处理（fail-closed）。
 
 ## 第 1 步：开工门禁——Issue 与远端门禁就位
 

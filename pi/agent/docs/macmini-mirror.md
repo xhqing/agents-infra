@@ -31,7 +31,7 @@
                   MacBook Air（arm64）        Mac mini（x64 / 32GB）
                   ~/Developer（各自 clone）    ~/Developer（各自 clone）
                             │                          │
-                     Syncthing 双向（三个目录）
+                     Syncthing 双向（两个目录）
                             │                          │
         ~/.dev/private  ◄────┤                          ├────►  ~/.dev/private
         ~/.pi/agent     ◄────┘                          └────►  ~/.pi/agent
@@ -43,13 +43,14 @@
 - 全局能力层 `~/.pi/agent` 两边仍逐字节一致（双向），所以任何一台机器都能改规则 / 技能；
   **开源镜像只在本机（MacBook）上生成并推送**（单 pusher，见 `docs/capability-sync.md`；2026-11-16 从 macmini 迁回本机，macmini 上的仓库副本已删除）。
 
-## 三、同步范围（三个目录）
+## 三、同步范围（两个目录）
 
 | folder id | 本机 | macmini | 模式 | 内容 | 排除项 |
 |---|---|---|---|---|---|
 | `private` | `~/.dev/private` | `~/.dev/private` | 双向 | 各项目私有内容**本体**（`private-links` 的软链接指过来） | `.DS_Store`、`._*` |
 | `pi-agent` | `~/.pi/agent` | `~/.pi/agent` | 双向 | 全局能力层（`AGENTS.md` / `skills/` / `docs/` / `patch/` / `extensions/` / `prompts/` / `themes/` / 配置） | `sessions/`、`state/`、`logs/`、`tmp/`、`intercom/`、`npm/`、`bin/`、运行时缓存、`trust.json`、`skills/anysearch/runtime.conf`、`patch/session-link/*.json`、`__pycache__`、`*.log`、`*.lock` |
-| `pi-alt` | `~/.pi-alt` | `~/.pi-alt` | 双向 | pi-alt-team 权威源：`agent/` 下的规则、技能、设置 | `sessions/`、`state/`、`logs/`、`tmp/`、`node_modules/`、`auth.json`、`*.log` |
+
+> **`pi-alt` folder 已退役（2026-11-23）**：双身份取消、`~/.pi-alt` 整体归档，这层同步已从两台机器移除（`patch/macmini-mirror/setup.py --drop-pi-alt`）。原来「私有团队单独一套配置」的需求已被「一套规则 + 可见性判定」取代。
 
 **明确不同步**：`~/Developer` 下所有项目仓库（含 `.git`、worktree、`node_modules`、构建产物）、
 `~/.dev/snapshots/`（本地快照，各机各留 5 份）、机器本地配置（`settings.local.json`、
