@@ -13,10 +13,14 @@ required checks / strict / auto-merge 都拿不到，服务端不会替我们挡
 ~/.pi/agent/patch/pa-workflow/pa-install-hooks.sh --check  # 只看现状
 ```
 
-装的是 `~/.config/git/hooks/` 下的两个分发器（`core.hooksPath` 指这里）：
+装的是 `~/.config/git/hooks/` 下的四个分发器（`core.hooksPath` 指这里）：
 
 - `pre-push` → `pre-push-guard.sh`（私有仓库 main 锁 + 已发布 tag 不可移动 / 删除）→ 仓库自己的 `.githooks/pre-push`
-- `pre-commit` → `pa-main-guard.sh`（私有仓库 local main 不接受提交）→ 原来的 `pre-commit.gitleaks`（gitleaks + 版本一致性）
+- `pre-commit` → `pa-main-guard.sh commit`（私有仓库 local main 不接受提交）→ 原来的 `pre-commit.gitleaks`（gitleaks + 版本一致性）
+- `pre-merge-commit` → `pa-main-guard.sh merge`（私有仓库 local main 不接受合并提交）——快进合并不触发它，`git merge --ff-only origin/main` 照常
+- `pre-rebase` → `pa-main-guard.sh rebase`（私有仓库 local main 不接受变基 / `git pull --rebase`）
+
+**为什么 merge / rebase 要单装钩子**（2026-11-24 实测发现的漏洞）：githooks(5) 规定 `pre-commit` **只由 git-commit 调用**——git-merge 调 `pre-merge-commit`、git-rebase 调 `pre-rebase`。只装前者时，`git merge --no-ff feat` 能在 local main 上直接建出合并提交（exit=0）、`git rebase` 能改写 main 历史，两者零拦截。
 
 ## 日常用法
 
@@ -56,6 +60,10 @@ python3 -m compileall -q src
 | 维度 | 公开仓库（服务端） | 私有仓库（本地） |
 |---|---|---|
 | 禁止直推 main | branch protection | `pre-push-guard.sh`（钩子层，任何进程都拦） |
+| 禁止在 main 上落提交 | branch protection（服务端拒收） | `pre-commit` → `pa-main-guard.sh commit`（钩子层） |
+| 禁止在 main 上合并 / 变基 | branch protection（服务端拒收） | `pre-merge-commit` / `pre-rebase` → `pa-main-guard.sh merge|rebase`（钩子层；2026-11-24 补） |
+| 禁止在 main 上 reset / cherry-pick / revert / am / 改写引用 | branch protection（服务端拒收） | pi 端 `git-main-guard.ts`（tool 层；git 没有对应钩子） |
+| 禁止在主工作区 main 上写文件 | PR 流程 + 分支保护 | pi 端 `main-wip-guard.ts`（tool 层当场拦）+ `agent_settled` 自动搬运 |
 | required checks | required status check | `pa-merge.sh` 跑 `checks.sh` |
 | strict（必须基于最新 base） | `required_status_checks.strict` | 每次 fetch 后在最新 `origin/main` 上合并，push 被拒自动重来 |
 | auto-merge | GitHub auto-merge | `pa-merge.sh --push` 串行合 + 单 pusher |
@@ -64,7 +72,11 @@ python3 -m compileall -q src
 
 ## 已知限制（诚实声明）
 
-- 本地钩子可被 `git push --no-verify` 绕过（私有仓库无服务端兜底），只能靠「单 pusher + 钩子 + 定期审计」近似。
+- 本地钩子可被 `git push --no-verify` / `git commit --no-verify` / `git merge --no-verify` 绕过（私有仓库无服务端兜底），只能靠「单 pusher + 钩子 + 定期审计」近似。
+- **git 没有 pre-reset / pre-cherry-pick 钩子**：`git reset` / `git cherry-pick` / `git revert` / `git am` / `git update-ref` / `git branch -f` 这几类只能由 pi 端 `git-main-guard.ts` 拦——即只覆盖「pi 会话里发出的命令」，人直接在终端敲的拦不住。
+- 同理「主工作区 main 上写文件」只拦 pi 的 `write` / `edit` 与常见 shell 写动作（重定向 / `sed -i` / `cp` / `mv` / `tee` / `chmod` …），**不含** `python` / `node` 脚本内部写盘（会把 `worktree-adopt.py` 这类正常流程误拦）。
+- `pre-rebase` 只判断「当前分支是不是 main」；`git rebase main feature`（在别的分支上把 feature 变基到 main）若当前正停在 main 上会被一并拦住，用带分支参数的写法或换到目标分支再操作。
+- **公开仓库在两层的行为不同**：钩子层**放行**（公开仓交给 GitHub 服务端 branch protection + CI）；pi 端 `git-main-guard.ts` / `main-wip-guard.ts` **照样拦**——与既有的 `git add` / `git commit` 同一口径：不论仓库可见性，团队仓库的 local main 都不承载任何写操作（local main 的职责与远端保护无关）。
 - 私有仓库没有 PR 审阅页面，用合并提交正文替代。
 - 单 pusher 状态在 `~/.dev/private/.state/pa-pusher.json`（随 Syncthing 同步），临时接管用 `PA_ALLOW_NON_PUSHER=1`。
 - 可见性缓存 `~/.pi/agent/state/repo-visibility.json`（TTL 1 天，`PA_VISIBILITY_TTL` 可调）；判不出来时按私有处理（fail-closed）。
