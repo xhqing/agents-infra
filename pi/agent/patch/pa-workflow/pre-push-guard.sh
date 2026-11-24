@@ -52,7 +52,7 @@ try:
 except Exception:
     d = {}
 e = d.get(slug) or {}
-if e.get("visibility") and now - int(e.get("checked", 0)) < ttl:
+if e.get("visibility") in ("private", "public") and now - int(e.get("checked", 0)) < ttl:
     print(e["visibility"])
 PY
 )

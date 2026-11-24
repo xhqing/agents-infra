@@ -10,6 +10,7 @@
 「LICENSE.md 是否存在」，**从不校验已有许可证的类型是否与项目性质匹配**。
 
 本脚本做**粗筛**，输出候选清单，不做最终裁决：
+- **私有仓库反转判据**（2026-11-23 用户立）：私有仓**不许放任何许可协议**——没有许可证 = OK，有 = VIOLATION（直接删）；
 - 能确定的（明确软件 / 明确内容）直接给 OK 或 MISMATCH；
 - 拿不准的（规则集、混合仓库）标 REVIEW，交给 AI 语义判断或用户裁定。
 
@@ -18,7 +19,7 @@
     python3 license-check.py --root <目录>       # 换扫描根
     python3 license-check.py --repo <仓库路径>   # 只查一个仓库
 
-退出码：0 = 无 MISMATCH；1 = 存在 MISMATCH（便于 CI / 巡检脚本判断）。
+退出码：0 = 无 MISMATCH / VIOLATION；1 = 存在（便于 CI / 巡检脚本判断）。
 """
 
 from __future__ import annotations
@@ -169,9 +170,72 @@ def ccby_purity(repo: Path) -> str:
     return ""
 
 
+VISIBILITY_CACHE = Path.home() / ".pi" / "agent" / "state" / "repo-visibility.json"
+VISIBILITY_TTL = 86400
+_visibility_memo: dict[str, str] = {}
+
+
+def repo_visibility(repo: Path) -> str:
+    """private / public / unknown。与 git 钩子共用同一份缓存（~/.pi/agent/state/repo-visibility.json）。"""
+    try:
+        url = subprocess.run(["git", "-C", str(repo), "remote", "get-url", "origin"],
+                             capture_output=True, text=True, timeout=10).stdout.strip()
+    except Exception:
+        url = ""
+    if "github.com" not in url:
+        return "unknown"
+    slug = re.sub(r"^git@[^:]*:", "", url)
+    slug = re.sub(r"^https?://[^/]*/", "", slug)
+    slug = slug.removesuffix(".git").rstrip("/")
+    if slug.count("/") != 1:
+        return "unknown"
+    if slug in _visibility_memo:
+        return _visibility_memo[slug]
+
+    cache: dict = {}
+    try:
+        import json
+        cache = json.loads(VISIBILITY_CACHE.read_text(encoding="utf-8"))
+    except Exception:
+        cache = {}
+    entry = cache.get(slug) or {}
+    now = int(__import__("time").time())
+    vis = entry.get("visibility")
+    if vis in ("private", "public") and now - int(entry.get("checked", 0)) < VISIBILITY_TTL:
+        _visibility_memo[slug] = vis
+        return vis
+
+    vis = "unknown"
+    try:
+        out = subprocess.run(["gh", "api", f"repos/{slug}", "--jq", ".private"],
+                             capture_output=True, text=True, timeout=20).stdout.strip()
+        vis = {"true": "private", "false": "public"}.get(out, "unknown")
+    except Exception:
+        vis = "unknown"
+    try:
+        import json
+        cache[slug] = {"visibility": vis, "checked": now}
+        VISIBILITY_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        VISIBILITY_CACHE.write_text(json.dumps(cache, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+                                    encoding="utf-8")
+    except Exception:
+        pass
+    _visibility_memo[slug] = vis
+    return vis
+
+
 def check_repo(repo: Path) -> dict:
     lic, lic_raw = detect_license(repo)
     res = {"repo": repo.name, "license": lic, "license_raw": lic_raw}
+    visibility = repo_visibility(repo)
+    if visibility == "private":
+        # 私有仓：不放许可协议才是对的（2026-11-23 用户立）
+        if lic == "none":
+            res.update(kind="—", verdict="OK (private)", detail="私有仓库，按规矩不放许可证")
+        else:
+            res.update(kind="—", verdict="VIOLATION (private)",
+                       detail="私有仓库不得放许可协议，直接删掉")
+        return res
     if lic == "none":
         res.update(kind="—", verdict="NO LICENSE", detail="无许可证文件")
         return res
@@ -218,12 +282,17 @@ def main() -> int:
     for r in rows:
         print(f"{r['repo'].ljust(width)}  {r['license'].ljust(20)} {r['kind'].ljust(9)} {r['verdict']}  —  {r['detail']}")
     mismatches = [r for r in rows if r["verdict"].startswith("MISMATCH")]
+    violations = [r for r in rows if r["verdict"].startswith("VIOLATION")]
     warns = [r for r in rows if r["verdict"].startswith("WARN")]
     reviews = [r for r in rows if r["verdict"] == "REVIEW"]
     print()
-    print(f"共 {len(rows)} 个仓库：OK {sum(1 for r in rows if r['verdict'] == 'OK')}，"
-          f"MISMATCH {len(mismatches)}，WARN {len(warns)}，REVIEW {len(reviews)}，"
+    print(f"共 {len(rows)} 个仓库：OK {sum(1 for r in rows if r['verdict'].startswith('OK'))}，"
+          f"MISMATCH {len(mismatches)}，VIOLATION {len(violations)}，WARN {len(warns)}，REVIEW {len(reviews)}，"
           f"其余为 fork / 无许可证 / 其它许可需人工判断")
+    if violations:
+        print("\n需要处理（私有仓库不许放许可协议，删掉）：")
+        for r in violations:
+            print(f"  - {r['repo']}：{r['license']} —— {r['detail']}")
     if mismatches:
         print("\n需要处理（类型与性质不匹配）：")
         for r in mismatches:
@@ -232,7 +301,7 @@ def main() -> int:
         print("\n需要处理（CC BY 4.0 文件不是纯官方全文，GitHub 会显示 Other）：")
         for r in warns:
             print(f"  - {r['repo']}：{r['detail']}")
-    return 1 if (mismatches or warns) else 0
+    return 1 if (mismatches or warns or violations) else 0
 
 
 if __name__ == "__main__":
