@@ -35,7 +35,7 @@ description: 软件开发项目的核心功能开发循环（远端 main 分支�
 
 | 维度 | 公开仓库（其余各步） | 私有仓库（本节） |
 |---|---|---|
-| 禁止直推 main | GitHub branch protection | `pre-push` 守卫（钩子层，任何进程都拦）+ `pa-main-guard.sh` 拦 local main 上的提交 |
+| 禁止直推 main | GitHub branch protection | `pre-push` 守卫（钩子层，任何进程都拦）+ `pa-main-guard.sh` 拦 local main 上的提交 / 合并 / 变基（`pre-commit` / `pre-merge-commit` / `pre-rebase` 三档） |
 | required checks | required status check | `pa-merge.sh` 在合并后的临时工作树里跑仓库根 `checks.sh`（缺文件拒合） |
 | strict（必须最新 base） | `required_status_checks.strict` | 每次 fetch 后在刚拉下来的 `origin/main` 上合并；push 被拒自动重来（≤3 次） |
 | auto-merge | GitHub auto-merge | `pa-merge.sh --push` 串行合 + 单 pusher（`~/.dev/private/.state/pa-pusher.json`） |
