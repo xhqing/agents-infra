@@ -112,7 +112,7 @@
 
 **注意**：`gridtrader` 默认分支是 `master`（其余为 `main`），保护挂在 `master` 上。
 
-**工具强制**：`~/.pi/agent/extensions/git-main-guard.ts`（2026-11-02 新增）拦截两类操作——① `git push` 的 refspec 指向 `main`/`master`（含裸 `git push`、`HEAD:main`、`--delete main`、`--all`/`--mirror`）；② 当前在 `main`/`master` 上的 `git commit`。仅对带 GitHub remote 的仓库生效；逃生标记 `# AI_AUTHORIZED_PUSH_MAIN` / `# AI_AUTHORIZED_COMMIT_MAIN`（仅限用户当轮授权）。**新装的扩展只对新会话生效**，已在跑的会话要重启才会加载。
+**工具强制**：`~/.pi/agent/extensions/git-main-guard.ts`（2026-11-02 新增；**2026-11-24 扩范围**）拦截—① `git push` 的 refspec 指向 `main`/`master`（含裸 `git push`、`HEAD:main`、`--delete main`、`--all`/`--mirror`）；② 当前在 `main`/`master` 上的 `git add` / `git commit`；③ main 上的 `reset` / `rebase` / `cherry-pick` / `revert` / `am`（后四者放行 `--abort`/`--quit`/`--skip`）、`checkout -B main`/`switch -C main`/`branch -f|-D|-d|-m|-M main`/`update-ref refs/heads/main`、以及会产出非快进的 `git pull`（`--ff-only` 放行）；另有**后置审计**（main 引用或停在 main 的 HEAD 非快进移动 → 只告警不阻塞）。配套：钩子层 `pa-main-guard.sh` 在 `pre-commit` / `pre-merge-commit` / `pre-rebase` 三档拦私有仓（`pa-install-hooks.sh` 机器级部署）；工作区层 `main-wip-guard.ts` 当场拦「停在 main 的主工作区」的 write / edit 与 bash 写动作。均仅对带 GitHub remote 的仓库生效；逃生标记 `# AI_AUTHORIZED_PUSH_MAIN` / `# AI_AUTHORIZED_COMMIT_MAIN` / `# AI_AUTHORIZED_ADD_MAIN` / `# AI_AUTHORIZED_WRITE_MAIN` / `# AI_AUTHORIZED_MAIN_WIP`（均仅限用户当轮授权）。**新装的扩展只对新会话生效**，已在跑的会话要重启才会加载；钩子层改动要重跑 `pa-install-hooks.sh`（macmini 同样一次）。
 
 ## 常用命令
 
