@@ -77,6 +77,7 @@
    - **启动必带 `-a`**：子项目 `.pi/` 下有 `APPEND_SYSTEM.md` 等资源，会触发 pi 的「信任本项目」判定（判据：`.pi/` 下存在 `settings.json` / `extensions` / `skills` / `prompts` / `themes` / `SYSTEM.md` / `APPEND_SYSTEM.md` 任一项）；tmux 后台会话没有人能应答那个提示，不带 `-a` 会卡死在提示上、永远不注册（2026-11-07 实测确认）。
    - **命名约定**：agentLeader / Agent 项目的 Worker 用 `<Agent 名>`；subLeader / 子项目的 Worker 用 `<Agent 名>-<子项目>`（如 `Atlas-cmux`）；同名多会话用 session-id 区分。
    - **生命周期**：Worker 用完即清（派它的 Leader 负责 `tmux kill-session -t pi-<名字>`），不长期挂着——用户看不到 tmux 后台会话，挂着等于隐形进程；subLeader 由 agentLeader 或用户按需开关。
+   - **全局规则改动的传播**：全局规则（角色定义 / 工作流 / 模板 / 约定）一变，多个项目的 `AGENTS.md` / `.pi/APPEND_SYSTEM.md` 要同批更新时，**按项目归属逐个 `agent_call` 对应 agent 的 agentLeader 完成各自项目（含名下全部子项目）的改动**——本会话自己的项目自己做，别人的项目只派单、不直改；派单前按本文件「子项目映射」表列全清单避免漏项。
    - **汇报链路**：Worker → 派它的 Leader；**agentLeader 与 subLeader 都可以直接向用户汇报**——用户找的是哪个 Leader，就由哪个 Leader 汇报，不强制经上级中转。
 6. **`.claude/` 一律清理（2026-11-11 用户定，取代 2026-10-17 的「暂留不动」）**：团队只用 pi，其它 harness 一律不维护——各 Agent 项目与子项目**不建 `.claude/` 目录、不存其它 harness 的配置**；项目专属技能与规则移到项目自己的 `.pi/` 下（`.pi/skills` 不再做成指向 `.claude/skills` 的软链接）。存量按项目逐个清理，处理到哪个项目就清哪个。
 7. **迁移口径（2026-11-08 已执行完毕）**：17 个子项目仓库全部改为「实体 `AGENTS.md` + 删掉 `.pi/settings.json` 里的四条跨仓库路径 + `.pi/APPEND_SYSTEM.md` 改为指向本仓库 `AGENTS.md` 与全局规则、角色段移入 `AGENTS.md`」。新增子项目照此从零建，**不要再挂软链接、不要再写 `settings.json` 跨仓库路径**。
