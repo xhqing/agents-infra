@@ -29,8 +29,9 @@
  * 另外 session_start 会拍一份 worktree 路径基线：没有所有权记录、且本会话开始前就存在的
  * worktree 一律按第 3 条静默处理（不把上几轮遗留的历史包袱压给新会话）。
  *
- * dirty / unpublished 两类**不跟着收窄**：它们确实是当前 Agent（Leader）的职责，收窄
- * 会漏掉真正需要处理的事（2026-11-12 用户明确）。
+ * dirty / unpublished 两类**不跟着收窄**：它们确实是当前会话 Leader 角色的职责——
+ * agentLeader 报自身 Agent 项目 + 名下全部子项目，subLeader 报自身项目，Worker 不报
+ * （2026-11-25 随角色重定义收窄：项目级收尾不是 Worker 的职责）。
  */
 
 import { execFileSync } from "node:child_process";
@@ -299,6 +300,8 @@ export default function (pi: ExtensionAPI) {
 				dirty: Dirty[];
 				unpublished?: Array<{ repo: string; version: string; commits: number }>;
 				worktrees?: Worktree[];
+				role?: string;
+				project?: string;
 			};
 
 			// ---------------------------------------------------------------------
@@ -351,7 +354,8 @@ export default function (pi: ExtensionAPI) {
 			// ---------------------------------------------------------------------
 			// 漏发版提醒（2026-11-08 加）：发版自动衔接只挂在 /commit 流程末尾，
 			// 走 PR + auto-merge 的链路没有环节回头检查——turn-diff 当天静默积压 7 个版本。
-			// 这一类不跟着收窄：它确实是当前 Agent（Leader）的职责（2026-11-12 用户明确）。
+			// 巡检范围已按角色收窄（2026-11-25）：agentLeader 扫自身 + 名下子项目，
+			// subLeader 只扫自身项目，Worker 不扫——项目级收尾不是 Worker 的职责。
 			// ---------------------------------------------------------------------
 			const stale = data.unpublished ?? [];
 			if (stale.length > 0) {
@@ -387,7 +391,7 @@ export default function (pi: ExtensionAPI) {
 			const list = dirty.map((d) => `${d.repo}（${d.changes} 处改动）`).join("、");
 			const skipNote = skipped > 0 ? `（另有 ${skipped} 个被 commit-mode 暂停的仓库已跳过）` : "";
 			ctx.ui.notify(
-				`[settle-repo-check] ${data.agent} 名下还有 ${dirty.length} 个子项目仓库不干净：${list} ` +
+				`[settle-repo-check] ${data.agent} 名下还有 ${dirty.length} 个仓库不干净：${list} ` +
 					`（2026-10-09 用户规则：收尾前必须处理干净）${skipNote}`,
 				"warning",
 			);
@@ -404,7 +408,7 @@ export default function (pi: ExtensionAPI) {
 				{
 					customType: "settle-repo-check",
 					content:
-						`[settle-repo-check] 你名下还有 ${dirty.length} 个子项目仓库不干净：${list}。` +
+						`[settle-repo-check] 你名下还有 ${dirty.length} 个仓库不干净：${list}。` +
 						`按用户 2026-10-09 立的规则，收尾前要全部处理干净——各仓库走 /add → /commit` +
 						`（该 bump / 发版就照常走）；若是在途 WIP（如 dev-workflow 先行的测试产物），` +
 						`向用户说明即可，不要硬提交。` +

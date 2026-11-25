@@ -133,6 +133,38 @@ def main_repo_root(path):
     return path
 
 
+def head_branch(path):
+    """当前 HEAD 的分支名：普通仓库读 `.git/HEAD`，worktree 读 gitdir 里的 HEAD。
+
+    - 命名分支 → 分支名；
+    - detached HEAD → 空字符串（非主分支）；
+    - 没有 git 信息 → None（已登记目录按主分支处理）。
+    """
+    git = os.path.join(path, ".git")
+    head = None
+    if os.path.isdir(git):
+        head = os.path.join(git, "HEAD")
+    elif os.path.isfile(git):
+        try:
+            with open(git, encoding="utf-8", errors="replace") as f:
+                m = re.search(r"^\s*gitdir:\s*(.+?)\s*$", f.read(), re.M)
+            if m:
+                gitdir = m.group(1)
+                if not os.path.isabs(gitdir):
+                    gitdir = os.path.normpath(os.path.join(path, gitdir))
+                head = os.path.join(gitdir, "HEAD")
+        except OSError:
+            return None
+    if not head:
+        return None
+    try:
+        raw = open(head, encoding="utf-8", errors="replace").read().strip()
+    except OSError:
+        return None
+    prefix = "ref: refs/heads/"
+    return raw[len(prefix):] if raw.startswith(prefix) else ""
+
+
 def find_agent(cwd, rows):
     """Agent 项目（含任何 worktree）→ 它自己；子项目（含任何 worktree）→ 归其 Agent；都不匹配 → None。
 
@@ -148,11 +180,9 @@ def find_agent(cwd, rows):
     return None
 
 
-def dirty_repos(agent, rows):
+def dirty_repos(projects):
     out = []
-    for a, proj in rows:
-        if a != agent:
-            continue
+    for proj in projects:
         d = os.path.join(DEV, proj)
         if not os.path.isdir(os.path.join(d, ".git")):
             continue
@@ -199,7 +229,7 @@ def _has_core_change(subjects):
     return False
 
 
-def unpublished_repos(agent, rows):
+def unpublished_repos(projects):
     """自最新 tag 有核心功能类提交、但 VERSION 对应的 GitHub Release 不存在 → 漏发版。
 
     为什么加（2026-11-08）：发版自动衔接只挂在 /commit 流程末尾；走 PR + auto-merge
@@ -207,9 +237,7 @@ def unpublished_repos(agent, rows):
     这里**只提示、不自动发版**：发版必须走 /release 完整流程（打 tag 不易撤销）。
     """
     out = []
-    for a, proj in rows:
-        if a != agent:
-            continue
+    for proj in projects:
         d = os.path.join(DEV, proj)
         if not os.path.isdir(os.path.join(d, ".git")):
             continue
@@ -265,7 +293,7 @@ def _sweep_projects(agent, rows):
     return projs
 
 
-def stale_worktrees(agent, rows):
+def stale_worktrees(projects):
     """已合并、且工作区干净的残留 worktree（可清理）。
 
     为什么加（2026-11-08）：规则要求 Leader 收尾时 `git worktree remove`，但这是
@@ -273,11 +301,12 @@ def stale_worktrees(agent, rows):
     没人发现。这里只**报告**（不自动删）：能判断「已合并 + 干净」就够了，删不删
     交给主人决定，避免误删在途 worktree。
 
-    扫描范围见 `_sweep_projects()`（含 Agent 项目自身仓库，2026-11-09 补齐）。
+    扫描范围由调用方按角色给定（agentLeader → 自身项目 + 名下子项目；subLeader →
+    自身项目；Worker → 不扫）。
     """
     out = []
     owners = owner_index()
-    for proj in _sweep_projects(agent, rows):
+    for proj in projects:
         d = os.path.join(DEV, proj)
         if not os.path.isdir(os.path.join(d, ".git")):
             continue
@@ -324,14 +353,14 @@ def stale_worktrees(agent, rows):
     return out
 
 
-def worktree_paths(agent, rows):
-    """当前 Agent 名下全部 worktree 路径（含主工作区；纯 git，不查 gh）。
+def worktree_paths(projects):
+    """给定项目清单下全部 worktree 路径（含主工作区；纯 git，不查 gh）。
 
     用途：pi 端扩展在 session_start 拍基线，settle 时只报「本会话开始后才出现」且
     没有所有权记录的 worktree——避免把上几轮会话遗留的历史包袱压给新会话。
     """
     out = []
-    for proj in _sweep_projects(agent, rows):
+    for proj in projects:
         d = os.path.join(DEV, proj)
         if not os.path.isdir(os.path.join(d, ".git")):
             continue
@@ -368,14 +397,32 @@ def main():
     if not agent:
         sys.exit(0)  # 非 Agent / 子项目会话 → 无此项
 
+    project = os.path.basename(os.path.normpath(main_repo_root(cwd)))
+    branch = head_branch(cwd)
+    is_agent = any(a.lower() == project.lower() for a, _ in rows)
+    # 角色只看「项目类型 + 当前是否停在 main」：
+    #   Agent 项目主工作区 main → agentLeader；子项目主工作区 main → subLeader；
+    #   任何项目的非 main worktree（含 detached HEAD）→ Worker。
+    on_main = branch is None or branch in ("main", "master")
+    if not on_main:
+        role = "worker"
+    else:
+        role = "agentLeader" if is_agent else "subLeader"
+    if role == "agentLeader":
+        projects = _sweep_projects(agent, rows)
+    elif role == "subLeader":
+        projects = [project]
+    else:
+        projects = []
+
     # 基线快照：纯 git，不查 gh（session_start 调，要快）
     if "--worktree-paths" in args:
-        print(json.dumps({"agent": agent, "paths": worktree_paths(agent, rows)}, ensure_ascii=False))
+        print(json.dumps({"agent": agent, "project": project, "role": role, "paths": worktree_paths(projects)}, ensure_ascii=False))
         sys.exit(0)
 
-    dirty = dirty_repos(agent, rows)
-    stale = unpublished_repos(agent, rows)
-    leftover = stale_worktrees(agent, rows)
+    dirty = dirty_repos(projects)
+    stale = unpublished_repos(projects)
+    leftover = stale_worktrees(projects)
 
     if cc:
         if leftover:
@@ -404,7 +451,7 @@ def main():
             sys.exit(2)
         sys.exit(0)
 
-    result = {"agent": agent, "dirty": dirty, "unpublished": stale, "worktrees": leftover}
+    result = {"agent": agent, "project": project, "role": role, "dirty": dirty, "unpublished": stale, "worktrees": leftover}
     if "--json" in args:
         print(json.dumps(result, ensure_ascii=False))
     else:

@@ -24,7 +24,7 @@
  */
 
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { basename, join, sep } from "node:path";
+import { basename, isAbsolute, join, resolve as pathResolve, sep } from "node:path";
 import { homedir } from "node:os";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { StringEnum } from "@earendil-works/pi-ai";
@@ -65,20 +65,18 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * 会话目录角色（2026-11-12 用户重新定义，取代 2026-11-07 版）：
- *   - leader：Agent 项目根目录，或 Agent 项目的 git worktree（项目负责人）；
- *   - worker：已登记子项目根目录，或该子项目的 git worktree（临时工）。
+ * 会话目录角色（2026-11-25 用户重新定义，取代 2026-11-12 版）：
+ *   - agentLeader：cwd 是 Agent 项目主工作区的 main（/ master）分支；
+ *   - subLeader：cwd 是已登记子项目主工作区的 main（/ master）分支；
+ *   - worker：cwd 落在任何项目的非 main 分支 worktree（含 Agent 项目的 worktree）。
  *
- * Leader / Worker 不是“主工作区 vs worktree”，而是 Agent 项目 vs 它负责的子项目：
- * Agent 项目的主工作区与任何 worktree 都是 Leader；子项目的主工作区与任何 worktree 都是 Worker。
+ * 角色只看两件事：cwd 所在项目 + 当前是否停在 main 分支。主工作区被切到非 main 分支时同样算 Worker。
+ * 权限：agentLeader ⊃ 名下全部子项目的 subLeader ⊃ 该项目 Worker；Worker 只干当前 worktree 的活。
  *
- * 为什么：子项目有自己的专属规则（`.pi/APPEND_SYSTEM.md`）与工具，只有在「cwd 落在子项目 /
- * worktree」时才会被 pi 加载；Agent 项目的 worktree 加载的是 Agent 项目规则，所以它是 Leader。
- *
- * 校验仍按 `~/.pi/agent/docs/agents-registry.md`：Agent 名单取「智能体命名注册表」的「项目（仓库）」列，
- * 子项目名单取「子项目映射」表第一列（`assistant-agent（Kit）` 取括号前的项目名）与第二列；**不再依赖
+ * 校验按 `~/.pi/agent/docs/agents-registry.md`：Agent 名单取「智能体命名注册表」的「项目（仓库）」列，
+ * 子项目名单取「子项目映射」表第一列（`assistant-agent（Kit）` 取括号前的项目名）与第二列；**不依赖
  * 「项目名以 Agent 结尾」这个旧命名约定**（2026-11-09 用户立：性质看 README 的 Type 徽章，名字只求简单）。
- * worktree 用 `.git` 文件里的 `gitdir:` 反查主仓库；主仓库是 Agent 项目 → Leader，是子项目 → Worker。
+ * worktree 用 `.git` 文件里的 `gitdir:` 反查主仓库；角色再由「主仓库属于 Agent 项目还是子项目 + 当前分支」定。
  * 注册表不可读时退回旧的标记文件检查（AGENTS.md / .pi）。
  */
 const REGISTRY = join(homedir(), ".pi", "agent", "docs", "agents-registry.md");
@@ -161,9 +159,43 @@ function mainRepoOfWorktree(dir: string): string | undefined {
 	}
 }
 
+type Role = "agentLeader" | "subLeader" | "worker";
+
+type HeadInfo = { kind: "branch"; name: string } | { kind: "detached" } | { kind: "none" };
+
+/** 读目录当前 HEAD：main workspace 读 `.git/HEAD`，worktree 读 gitdir 里的 HEAD。 */
+function readHead(dir: string): HeadInfo {
+	const gitPath = join(dir, ".git");
+	let headPath: string | undefined;
+	try {
+		const st = statSync(gitPath);
+		if (st.isDirectory()) {
+			headPath = join(gitPath, "HEAD");
+		} else {
+			const m = /^\s*gitdir:\s*(.+?)\s*$/m.exec(readFileSync(gitPath, "utf8"));
+			if (!m) return { kind: "none" };
+			const gitdir = isAbsolute(m[1]) ? m[1] : pathResolve(dir, m[1]);
+			headPath = join(gitdir, "HEAD");
+		}
+	} catch {
+		return { kind: "none" };
+	}
+	try {
+		const raw = readFileSync(headPath, "utf8").trim();
+		const m = /^ref:\s*refs\/heads\/(.+)$/.exec(raw);
+		return m ? { kind: "branch", name: m[1] } : { kind: "detached" };
+	} catch {
+		return { kind: "none" };
+	}
+}
+
+/** 只有 main / master（或没有 git 信息的已登记目录）算主分支；detached HEAD 一律算 Worker。 */
+function isMainBranch(head: HeadInfo): boolean {
+	return head.kind === "none" || (head.kind === "branch" && (head.name === "main" || head.name === "master"));
+}
+
 type DirCheck =
-	| { ok: true; role: "leader"; project: string; worktree: boolean }
-	| { ok: true; role: "worker"; project: string; worktree: boolean }
+	| { ok: true; role: Role; project: string; worktree: boolean }
 	| { ok: false; detail: string };
 
 function checkSessionDir(dir: string): DirCheck {
@@ -187,29 +219,32 @@ function checkSessionDir(dir: string): DirCheck {
 		return { ok: false, detail: `拒绝唤醒：注册表（${REGISTRY}）不可读，且目录「${dir}」根目录没有 AGENTS.md / .pi。` };
 	}
 
-	if ([...info.agents].some((n) => n.toLowerCase() === lower)) {
-		return { ok: true, role: "leader", project: name, worktree: false };
-	}
-	if (info.subprojects.has(lower)) {
-		return { ok: true, role: "worker", project: name, worktree: false };
-	}
 	const mainRepo = mainRepoOfWorktree(expanded);
-	if (mainRepo) {
-		const mainName = basename(mainRepo);
-		if ([...info.agents].some((n) => n.toLowerCase() === mainName.toLowerCase())) {
-			return { ok: true, role: "leader", project: mainName, worktree: true };
-		}
-		if (info.subprojects.has(mainName.toLowerCase())) {
-			return { ok: true, role: "worker", project: mainName, worktree: true };
-		}
+	const mainName = mainRepo ? basename(mainRepo) : undefined;
+
+	let projectKind: "agent" | "sub" | undefined;
+	let projectName = name;
+	if ([...info.agents].some((n) => n.toLowerCase() === lower)) {
+		projectKind = "agent";
+	} else if (info.subprojects.has(lower)) {
+		projectKind = "sub";
+	} else if (mainName) {
+		projectName = mainName;
+		if ([...info.agents].some((n) => n.toLowerCase() === mainName.toLowerCase())) projectKind = "agent";
+		else if (info.subprojects.has(mainName.toLowerCase())) projectKind = "sub";
 	}
 
-	return {
-		ok: false,
-		detail:
-			`拒绝唤醒：目录「${dir}」不是已登记的 Agent 项目 / 子项目，也不是它们的 git worktree` +
-			`（按 ~/.pi/agent/docs/agents-registry.md 校验；Agent 项目→Leader，子项目→Worker）。`,
-	};
+	if (!projectKind) {
+		return {
+			ok: false,
+			detail:
+				`拒绝唤醒：目录「${dir}」不是已登记的 Agent 项目 / 子项目，也不是它们的 git worktree` +
+				`（按 ~/.pi/agent/docs/agents-registry.md 校验；角色看项目类型 + 当前分支：main → agentLeader / subLeader，非 main → Worker）。`,
+		};
+	}
+
+	const role: Role = !isMainBranch(readHead(expanded)) ? "worker" : projectKind === "agent" ? "agentLeader" : "subLeader";
+	return { ok: true, role, project: projectName, worktree: Boolean(mainRepo) };
 }
 
 async function listSessions(pi: ExtensionAPI, signal?: AbortSignal): Promise<SessionInfo[]> {
@@ -266,7 +301,7 @@ async function wakeSession(
 		if (signal?.aborted) return { ok: false, detail: "已取消" };
 		await sleep(1_000);
 		if (await isOnline(pi, name, signal)) {
-			return { ok: true, detail: `已唤醒「${name}」（${i} 秒完成注册）` };
+			return { ok: true, detail: `已唤醒「${name}」（${check.role}，${i} 秒完成注册）` };
 		}
 	}
 	return { ok: false, detail: `等待 ${waitSeconds} 秒后「${name}」仍未注册到 intercom（可检查目标目录是否正确）` };
@@ -360,10 +395,10 @@ export default function agentCallExtension(pi: ExtensionAPI) {
 		name: "agent_wake",
 		label: "Agent Wake",
 		description:
-			"确保另一个 pi 会话（pi-intercom 互通）处于在线状态：若不在线，则在指定项目目录用 tmux 启动一个新 pi 会话（pi -n <名字>，名字即 intercom 别名）并等待其注册。可在 agent_call 之前预热，或单独准备对方会话。dir 支持四类目录（按 ~/.pi/agent/docs/agents-registry.md 校验）：Agent 项目根 → Leader 会话；Agent 项目的 git worktree → Leader 会话；已登记子项目根 → Worker 会话；子项目的 git worktree → Worker 会话（临工干活的地方，能加载子项目自己的 .pi/APPEND_SYSTEM.md 与工具）。启动命令带 -a 信任项目文件（子项目有 .pi/settings.json，不带会卡在信任提示上）。非以上四类目录会被拒绝。",
+			"确保另一个 pi 会话（pi-intercom 互通）处于在线状态：若不在线，则在指定项目目录用 tmux 启动一个新 pi 会话（pi -n <名字>，名字即 intercom 别名）并等待其注册。可在 agent_call 之前预热，或单独准备对方会话。dir 支持四类目录（按 ~/.pi/agent/docs/agents-registry.md 校验）：Agent 项目根（停在 main → agentLeader）；Agent 项目的 git worktree（Worker）；已登记子项目根（停在 main → subLeader）；子项目的 git worktree（Worker，能加载子项目自己的 .pi/APPEND_SYSTEM.md 与工具）。角色由「项目类型 + 目标目录当前分支」判定，主工作区被切到非 main 分支也算 Worker。启动命令带 -a 信任项目文件（子项目有 .pi/settings.json，不带会卡在信任提示上）。非以上四类目录会被拒绝。",
 		parameters: Type.Object({
 			name: Type.String({ description: "目标会话名字（pi-intercom 别名，与 /alias 或 pi -n 设置一致）——唤醒只认名字（新会话按此名字启动）" }),
-			dir: Type.String({ description: "目标会话的启动工作目录：Agent 项目根（Leader）/ Agent 项目的 git worktree（Leader）/ 已登记子项目根（Worker）/ 子项目的 git worktree（Worker）——按 ~/.pi/agent/docs/agents-registry.md 校验，其它目录会被拒绝；绝对路径或 ~ 开头" }),
+			dir: Type.String({ description: "目标会话的启动工作目录：Agent 项目根（main → agentLeader）/ Agent 项目的 git worktree（Worker）/ 已登记子项目根（main → subLeader）/ 子项目的 git worktree（Worker）——按 ~/.pi/agent/docs/agents-registry.md 校验、按当前分支判角色，其它目录会被拒绝；绝对路径或 ~ 开头" }),
 			wait_seconds: Type.Optional(
 				Type.Number({ description: `等待注册的最长秒数（默认 ${DEFAULT_WAIT_SECONDS}）`, minimum: 3, maximum: 120 }),
 			),
@@ -395,7 +430,7 @@ export default function agentCallExtension(pi: ExtensionAPI) {
 		parameters: Type.Object({
 			name: Type.String({ description: "目标会话：pi-intercom 别名（人格名，如 Kit）或 session-id（或其短前缀，`pi-intercom list` 可见）——同一个 agent 可多开同名会话，此时用 session-id 唯一定位" }),
 			message: Type.String({ description: "消息内容（对方看不到本会话上下文，请自带背景与明确请求）" }),
-			dir: Type.Optional(Type.String({ description: "目标会话工作目录；对方不在线时用它自动唤醒。允许：Agent 项目根（Leader）/ Agent 项目的 git worktree（Leader）/ 已登记子项目根（Worker）/ 子项目的 git worktree（Worker）——按注册表校验，其它目录会被拒绝；建议总是提供" })),
+			dir: Type.Optional(Type.String({ description: "目标会话工作目录；对方不在线时用它自动唤醒。允许：Agent 项目根（main → agentLeader）/ Agent 项目的 git worktree（Worker）/ 已登记子项目根（main → subLeader）/ 子项目的 git worktree（Worker）——按注册表校验、按当前分支判角色，其它目录会被拒绝；建议总是提供" })),
 			mode: Type.Optional(
 				StringEnum(["ask", "send"] as const, { description: "ask=阻塞等回复（默认）；send=仅通知、以本会话身份发送" }),
 			),
