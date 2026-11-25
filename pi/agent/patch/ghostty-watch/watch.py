@@ -85,10 +85,24 @@ def rotate_log() -> None:
 
 # ---------- 进程扫描 ----------
 
-def scan_processes() -> dict[int, dict]:
-    """返回 {pid: {ppid, rss_kb, etime, cmd}}，只含 ghostty 主进程。"""
-    out = run(["ps", "-eo", "pid=,ppid=,rss=,etime=,command="])
+def scan_processes_checked() -> tuple[dict[int, dict], bool]:
+    """返回 ({pid: {ppid, rss_kb, etime, cmd}}, 本轮扫描是否可信)，只含 ghostty 主进程。
+
+    为什么要把「扫描失败」和「没有进程」分开：ps 偶发超时 / 失败 / 输出异常时，旧实现
+    把它当成「没有 ghostty」，于是好端端跑着的进程被判「退出」并写下 pending。
+    2026-11-25 实测两次：pid 32530 在 15:31:14 被判 DIED、15:31:36 又以**同一个 pid**
+    重新 START —— 同一次启动不可能先死后生，这两条都是扫描失败造成的误报。
+    """
+    try:
+        r = subprocess.run(["ps", "-eo", "pid=,ppid=,rss=,etime=,command="],
+                           capture_output=True, text=True, timeout=20)
+    except Exception:
+        return {}, False
+    out = r.stdout or ""
+    if r.returncode != 0 or not out.strip():
+        return {}, False
     procs: dict[int, dict] = {}
+    parsed = 0
     for line in out.splitlines():
         parts = line.split(None, 4)
         if len(parts) < 5:
@@ -98,10 +112,39 @@ def scan_processes() -> dict[int, dict]:
             pid, ppid, rss = int(pid_s), int(ppid_s), int(rss_s)
         except ValueError:
             continue
+        parsed += 1
         head = cmd.split(" ", 1)[0]
         if GHOSTTY_RE.search(head) or head.endswith("/ghostty"):
             procs[pid] = {"ppid": ppid, "rss_kb": rss, "etime": etime, "cmd": head}
-    return procs
+    # 一行都解析不出来 = ps 输出形态异常，同样不能当作「没有进程」
+    if parsed == 0:
+        return {}, False
+    return procs, True
+
+
+def scan_processes() -> dict[int, dict]:
+    return scan_processes_checked()[0]
+
+
+def pid_alive(pid: int) -> bool:
+    """单独复核一个 pid 是否还在跑（不依赖 ps 的批量输出）。
+
+    os.kill(pid, 0) 只做存在性检查、不发信号；查不动时一律按「还活着」处理——
+    宁可漏报一次被杀，也不要因为在世进程被误判死亡而写 pending / 推飞书。
+    """
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except Exception:
+        return True
+    return True
+
+
+def pid_start(pid: int) -> str:
+    """该 pid 的启动时刻（pid 被系统复用时这个值会变）；查不到返回空串。"""
+    out = run(["ps", "-p", str(pid), "-o", "lstart="], timeout=10).strip()
+    return " ".join(out.split())
 
 
 def tty_of_pid() -> dict[int, str]:
@@ -682,34 +725,95 @@ def prune_shell_beats(max_age_s: int = 86400) -> None:
 
 # ---------- 主循环 ----------
 
+# 判「消失」前必须连续这么多轮都看不到（每轮 5 秒，3 轮 ≈ 15 秒）。
+# 单轮抖动不再算数：2026-11-25 的两次误报都只出现在一轮里。
+DISAPPEAR_CONFIRM_TICKS = 3
+
+
+def rollback_false_death(pid: int, prev: dict) -> None:
+    """撤销一次误判的「退出」：删掉对应的 pending，日志留一条更正。"""
+    items = load_json(PENDING_FILE, [])
+    if isinstance(items, list):
+        kept = [ev for ev in items if ev.get("pid") != pid]
+        if len(kept) != len(items):
+            save_json(PENDING_FILE, kept)
+    append_event([
+        f"{now_str()}  WARN   误报更正：ghostty pid={pid} 仍在运行（启动时刻未变），"
+        f"{prev.get('time', '?')} 那条 DIED 是进程扫描失败造成的误判，已撤销对应 pending"
+    ])
+
+
 def tick() -> None:
     ensure_dirs()
     prune_shell_beats()
-    procs = scan_processes()
+    procs, scan_ok = scan_processes_checked()
     state = load_json(STATE_FILE, {})
     known: dict[str, dict] = state.get("pids") or {}
     baseline = bool(state.get("baseline"))
+    misses: dict[str, int] = state.get("misses") or {}
+    died: dict[str, dict] = state.get("died") or {}
+    scan_broken = bool(state.get("scan_broken"))
+
+    # 扫描这一轮不可信：既不判生也不判死，原样保留 state。只在状态翻转时记一条，
+    # 不每 5 秒刷屏。
+    if not scan_ok:
+        if not scan_broken:
+            append_event([f"{now_str()}  WARN   进程扫描失败（ps 无有效输出），本轮跳过判定"])
+        state["scan_broken"] = True
+        save_json(STATE_FILE, state)
+        return
+    if scan_broken:
+        append_event([f"{now_str()}  META   进程扫描已恢复"])
 
     cur_pids = {str(p) for p in procs}
 
-    # 消失的
+    # 消失的：连续多轮看不到 + 单独复核 + 判死后同 pid 复活即撤销
     for pid_s in list(known.keys()):
-        if pid_s not in cur_pids:
-            rec = known.pop(pid_s)
-            try:
-                handle_disappear(int(pid_s), rec)
-            except Exception as e:
-                append_event([f"{now_str()}  ERROR  处理 pid={pid_s} 失败: {e}"])
+        if pid_s in cur_pids:
+            misses.pop(pid_s, None)
+            continue
+        # 批量输出里没有它，再用 os.kill 单独确认一次（防止 ps 输出被截断）
+        if pid_alive(int(pid_s)):
+            misses.pop(pid_s, None)
+            continue
+        n = int(misses.get(pid_s) or 0) + 1
+        if n < DISAPPEAR_CONFIRM_TICKS:
+            misses[pid_s] = n
+            continue
+        misses.pop(pid_s, None)
+        rec = known.pop(pid_s)
+        died[pid_s] = {"lstart": rec.get("lstart") or "", "time": now_str()}
+        try:
+            handle_disappear(int(pid_s), rec)
+        except Exception as e:
+            append_event([f"{now_str()}  ERROR  处理 pid={pid_s} 失败: {e}"])
 
     # 新出现的（首轮只记基线，不造 START 噪声）
     for pid_s, info in procs.items():
         key = str(pid_s)
+        started = pid_start(pid_s)
+        prev_death = died.get(key)
+        if prev_death is not None:
+            died.pop(key, None)
+            if prev_death.get("lstart") and started and prev_death["lstart"] == started:
+                # 同一个进程（启动时刻一模一样）又出现了 = 刚才那条 DIED 是误报
+                rollback_false_death(int(pid_s), prev_death)
+                if key not in known:
+                    known[key] = {
+                        "first_seen": now_str(),
+                        "peak_rss_kb": info["rss_kb"],
+                        "children": scan_children(pid_s),
+                        "cmd": info["cmd"],
+                        "lstart": started,
+                    }
+                continue
         if key not in known:
             known[key] = {
                 "first_seen": now_str(),
                 "peak_rss_kb": info["rss_kb"],
                 "children": scan_children(pid_s),
                 "cmd": info["cmd"],
+                "lstart": started,
             }
             if baseline:
                 handle_new(int(pid_s), info)
@@ -717,8 +821,11 @@ def tick() -> None:
             rec = known[key]
             rec["peak_rss_kb"] = max(rec.get("peak_rss_kb", 0), info["rss_kb"])
             rec["children"] = scan_children(pid_s)
+            if started:
+                rec["lstart"] = started
 
-    state = {"pids": known, "baseline": True, "updated": now_str()}
+    state = {"pids": known, "baseline": True, "misses": misses, "died": died,
+             "updated": now_str()}
     save_json(STATE_FILE, state)
 
 

@@ -15,8 +15,13 @@
 
 typeset -g _GW_DIR="${GHOSTTY_WATCH_STATE:-$HOME/.local/state/ghostty-watch}"
 
-# ---- 1. 上次的终止事件（只在真有 pending 时输出）----
-if [[ -r "$_GW_DIR/pending.json" ]]; then
+# ---- 1. 上次的终止事件（只在真有 pending、且当前终端就是 Ghostty 时输出）----
+# 为什么限定终端：cmux 内嵌 libghostty，也会把 TERM_PROGRAM 设成 ghostty（2026-11-25
+# 实测），所以不能只看 TERM_PROGRAM，得看 cmux 自己的 CMUX_BUNDLE_ID。否则在 cmux 里
+# 新开一个终端，就会平白无故弹一段「ghostty 上次退出了」——两件事毫无关系，
+# 用户 2026-11-25 直接问到「我在 cmux 里打开终端，为什么要提示 ghostty 的异常退出」。
+# pending 不消费也不删：留给下次真开 Ghostty 时再打。
+if [[ -r "$_GW_DIR/pending.json" && -z "${CMUX_BUNDLE_ID:-}" && "${TERM_PROGRAM:-}" == ghostty ]]; then
   /usr/bin/python3 - "$_GW_DIR/pending.json" <<'PY' 2>/dev/null
 import json, sys
 try:
