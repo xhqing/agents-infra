@@ -139,6 +139,14 @@ attempt() {
   if [ "$PUSH" = "1" ]; then
     if git push -q origin "refs/heads/$BRANCH:refs/heads/$BRANCH" 2>/dev/null; then
       echo "✅ 分支快照已推：origin/$BRANCH"
+    elif git merge-base --is-ancestor "refs/heads/$BRANCH" "refs/remotes/origin/$BRANCH" 2>/dev/null; then
+      # 远端比本地新（典型场景：Worker 在另一台机器上干活并推了分支），强推会把那些提交盖掉。
+      short_local=$(git rev-parse --short "$BRANCH")
+      short_remote=$(git rev-parse --short "origin/$BRANCH")
+      echo "❌ 本地分支 ${BRANCH}（${short_local}）落后于 origin/${BRANCH}（${short_remote}）——先同步再合并：" >&2
+      echo "   git fetch origin && git branch -f ${BRANCH} origin/${BRANCH}" >&2
+      echo "   （强推快照会丢掉远端那些提交，2026-11-24 实测踩过：macmini 上 Worker 的分支被本机旧引用盖回旧提交）" >&2
+      return 1
     elif git push -q --force-with-lease origin "refs/heads/$BRANCH:refs/heads/$BRANCH" 2>/dev/null; then
       echo "✅ 分支快照已推（覆盖旧快照）：origin/$BRANCH"
     else

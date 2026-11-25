@@ -106,13 +106,14 @@ function buildBrief(modes: { add: boolean; commit: boolean }): string {
 ${commitLine}
 - 其它 agent 项目的仓库有待提交内容 → 直接 agent_call 对方按其自己的 /add → /commit 处理。
 - /add 预检完全干净 → 自动衔接 /commit；/commit 第 10 步命中发版条件 → 自动 bump / 发版。
+- main 上自最新 tag 以来有 fix / feat 前缀的提交（\`fix(ci)\` / \`fix(test)\` 这类只改测试与流水线的 scope 除外）→ **直接走 /bump → /release 发版，不询问**（2026-11-25 用户立「有 fix 就要发版」；\`release-on-fix-feat.ts\` 在收尾时巡检并强制提醒）。装到用户机器那一步（替换 /Applications 等）仍按项目硬约束问用户。
 - 新建项目 git init、向 agents-registry 追加新 agent 行 → 免确认。
 仍然该问的情况：方案分叉大 / 返工成本高 / 规则没覆盖 / 涉及不可逆破坏性操作。`;
 }
 
 /** 询问句式：命中说明在向用户征求确认。 */
 const ASK_RE =
-	/(要不要我|要我(现在|先)?(把|做|去|来|帮|直接|再)|需要我(帮|来|去|现在|先)?|是否要我|是否现在(就)?(做|处理)|现在就做吗|可以现在做|由你决定|你定|等你(确认|点头|指示|回复)|需要确认吗|要我现在)/;
+	/(要不要(发版|发布|打包|出包|提交|add|commit|release|bump)|要不要我|要我(现在|先)?(把|做|去|来|帮|直接|再)|需要我(帮|来|去|现在|先)?|是否要我|是否现在(就)?(做|处理)|现在就做吗|可以现在做|由你决定|你定|等你(确认|点头|指示|回复)|需要确认吗|要我现在)/;
 
 /** 已授权事项：关键词 → 命中后应该怎么做的提示（写进给 AI 的回执里）。 */
 const AUTHORIZED_HINTS: Array<{ re: RegExp; hint: string }> = [
@@ -124,6 +125,7 @@ const AUTHORIZED_HINTS: Array<{ re: RegExp; hint: string }> = [
 		re: /\/add\b|\/commit\b|\/bump\b|\/release\b|预检|发版链/,
 		hint:
 			"自动模式：直接按 /add → /commit 流程执行（预检干净会自动衔接，commit 第 10 步按规则自动 bump / 发版）。" +
+			"自最新 tag 以来有 fix / feat 前缀的提交时，直接走 /bump → /release 发版，**不要问「要不要发版」**（2026-11-25 用户立「有 fix 就要发版」）；只有装到用户机器那一步要问。" +
 			"被 add-mode / commit-mode 暂停时：只有用户当轮明确要求对应步骤时才执行，否则保持安静、把改动留在工作区",
 	},
 	{
