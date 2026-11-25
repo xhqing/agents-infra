@@ -68,7 +68,7 @@
    - **判据**：角色只看两件事——cwd 所在项目 + 当前是否停在 `main` / `master`。主工作区被切到非 main 分支时同样按 Worker 算（看当前分支，不看目录是不是主工作区）。
    - **agentLeader = Agent 项目主工作区（main 分支）**：在全团队规则允许范围内管理**自身 Agent 项目 + 它负责的全部子项目**——两者的 main（仅 ff 同步）、全部分支与 worktree，以及建树、派单、合并 PR、发版、收尾。
    - **subLeader = 子项目主工作区（main 分支）**：只管**自身项目**——local main 的 ff 同步、从自身 main 建删任务 worktree、派 Worker、按全局工作流合并自身项目的 PR、发自身项目的版、回收自己的 Worker；对上级 Agent 项目与 sibling 子项目**只读**（要它们变就走「`agent_call` 求其 Leader」或「建 Issue」）。
-   - **Worker = 任何项目的非 main 分支 worktree**：只干当前 worktree 里的具体任务（开发、调试、测试、提交、push 自己的分支 + PR），干完向派它的 Leader 汇报；**不碰 local main、不建删 worktree、不合并 PR、不发版、不写 worktree 以外的项目**。
+   - **Worker = 任何项目的非 main 分支 worktree**（含未登记目录 / 家目录里的会话——它们同样不是 Leader，但没有项目身份、只能写共享区）：只干当前 worktree 里的具体任务（开发、调试、测试、提交、push 自己的分支 + PR），干完向派它的 Leader 汇报；**不碰 local main、不建删 worktree、不合并 PR、不发版、不写 worktree 以外的项目**。
    - **权限蕴含**：agentLeader ⊃ 名下每个子项目的 subLeader ⊃ 该项目的 Worker。agentLeader 可以直接在子项目 worktree 里做事（dev-workflow「Leader 出测试」即如此）。
    - **local main / 任务专项 worktree**：任何 Leader 改自己 local main 只能 `fetch` + `merge --ff-only`；做任务一律先从最新 main 拷出 `<仓库名>-<事项>` worktree，任务只在 worktree 里做，派单时把该 worktree 的绝对路径作为 `agent_call` 的 `dir`。
    - **无主项目禁止入队**：新增任何非 Agent 项目，必须先登记为某个 Agent 项目的子项目（本文件映射表 + Agent 项目 `AGENTS.md`），否则不得入队。

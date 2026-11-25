@@ -509,7 +509,7 @@ KeePass 数据库（`*.kdbx`）与密钥文件（`~/Key/` 下）是**丢了就�
 - **Leader / Worker 的定义（2026-11-25 用户重新定义，**全队所有 Agent 的默认跑法**，取代 2026-11-12 版）**：角色只看两件事——**cwd 所在的项目** 与 **当前是不是停在 main 分支**（`main` / `master`）。主工作区被切到非 main 分支时同样按 Worker 算：角色看当前分支，不看目录是不是主工作区。
   - **agentLeader = Agent 项目主工作区的 main 分支**：权限最大——在全团队规则允许范围内，管理**自身 Agent 项目 + 它负责的全部子项目**：两者的 main（同一套 ff 同步纪律）、全部分支与 worktree，以及建树、派单、合并 PR、发版、收尾。
   - **subLeader = 子项目主工作区的 main 分支**：只管**自身项目**——local main 的 ff 同步、从自身 main 拷出任务 worktree（含建 / 删）、把任务派给 Worker、按全局工作流合并自身项目的 PR、发自身项目的版、回收自己的 Worker。对上级 Agent 项目与 sibling 子项目**只读**。
-  - **Worker = 其它一切**：cwd 落在**任何项目的非 main 分支 worktree**（含 Agent 项目的 worktree）即为 Worker。只干**当前 worktree** 里的具体活（读代码、改代码、跑测试、`/add` → `/commit` → push 自己的分支 + PR），干完向派它的 Leader 汇报；**不碰 local main、不建删 worktree、不合并 PR、不发版、不写当前 worktree 以外的任何项目**。
+  - **Worker = 其它一切**：cwd 落在**任何项目的非 main 分支 worktree**（含 Agent 项目的 worktree）即为 Worker（未登记目录 / 家目录里的会话也算 Worker，但没有项目身份，只能写共享区）；只干**当前 worktree** 里的具体活（读代码、改代码、跑测试、`/add` → `/commit` → push 自己的分支 + PR），干完向派它的 Leader 汇报；**不碰 local main、不建删 worktree、不合并 PR、不发版、不写当前 worktree 以外的任何项目**。
   - **权限蕴含关系**：agentLeader ⊃ 名下每个子项目的 subLeader ⊃ 该项目的 Worker。agentLeader 可以直接在子项目 worktree 里做事（dev-workflow 的「Leader 出测试」即如此），也可以把子项目任务派给 subLeader / Worker；subLeader 要改上级 Agent 项目或 sibling 子项目时，走 `agent_call` 求其 Leader、或在对方仓库建 Issue，不自己上手。
   - **local main 只有一种改法**：任何 Leader 改自己 local main 都只能 `git fetch` + `git merge --ff-only`（在主工作区执行）；不产生 main 提交、不直推 / 不强推、不 reset / rebase / cherry-pick。远程 main 一律走全局开发工作流（分支 → push → PR → CI auto-merge → 本地快进）。
   - **任务从 main 拷出**：Leader 做任务一律先 `git worktree add ../<仓库名>-<事项> -b <分支>` 从最新 main 拷出任务专项 worktree，任务只在该 worktree 里做；派单时把该 worktree 的绝对路径作为 `dir`。subLeader 的任务同样从**自身 main** 拷出，不借用上级或 sibling 项目的 worktree。
