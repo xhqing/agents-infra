@@ -75,7 +75,7 @@
    - **为什么要分**：子项目有专属规则与工具，只有 cwd 落在子项目（主工作区或 worktree）才被 pi / DSH 加载；但「加载到子项目规则」不等于「只能当 Worker」——子项目主工作区的 main 会话要能建 worktree、派单、管理自身项目，所以单列 subLeader。
    - **工具校验**：`agent_call` / `agent_wake` 的 `dir` 接受四类目录，按「项目类型 + 该目录当前分支」判角色——Agent 项目根（main → agentLeader）/ Agent 项目 worktree（Worker）/ 已登记子项目根（main → subLeader）/ 子项目 worktree（Worker），其它目录拒绝。`.git` 为文件时用 `gitdir:` 反查主仓库，主仓库名按本文件两张表判定项目类型。
    - **启动必带 `-a`**：子项目 `.pi/` 下有 `APPEND_SYSTEM.md` 等资源，会触发 pi 的「信任本项目」判定（判据：`.pi/` 下存在 `settings.json` / `extensions` / `skills` / `prompts` / `themes` / `SYSTEM.md` / `APPEND_SYSTEM.md` 任一项）；tmux 后台会话没有人能应答那个提示，不带 `-a` 会卡死在提示上、永远不注册（2026-11-07 实测确认）。
-   - **命名约定**：agentLeader / Agent 项目的 Worker 用 `<Agent 名>`；subLeader / 子项目的 Worker 用 `<Agent 名>-<子项目>`（如 `Atlas-cmux`、`Atlas-cmux`）；同名多会话用 session-id 区分。
+   - **命名约定**：agentLeader / Agent 项目的 Worker 用 `<Agent 名>`；subLeader / 子项目的 Worker 用 `<Agent 名>-<子项目>`（如 `Atlas-cmux`）；同名多会话用 session-id 区分。
    - **生命周期**：Worker 用完即清（派它的 Leader 负责 `tmux kill-session -t pi-<名字>`），不长期挂着——用户看不到 tmux 后台会话，挂着等于隐形进程；subLeader 由 agentLeader 或用户按需开关。
    - **汇报链路**：Worker → 派它的 Leader；**agentLeader 与 subLeader 都可以直接向用户汇报**——用户找的是哪个 Leader，就由哪个 Leader 汇报，不强制经上级中转。
 6. **`.claude/` 一律清理（2026-11-11 用户定，取代 2026-10-17 的「暂留不动」）**：团队只用 pi，其它 harness 一律不维护——各 Agent 项目与子项目**不建 `.claude/` 目录、不存其它 harness 的配置**；项目专属技能与规则移到项目自己的 `.pi/` 下（`.pi/skills` 不再做成指向 `.claude/skills` 的软链接）。存量按项目逐个清理，处理到哪个项目就清哪个。
