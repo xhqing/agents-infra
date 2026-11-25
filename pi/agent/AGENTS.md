@@ -519,6 +519,7 @@ KeePass 数据库（`*.kdbx`）与密钥文件（`~/Key/` 下）是**丢了就�
   - **汇报链路**：Worker → 派它的 Leader（subLeader 或 agentLeader）；**agentLeader 与 subLeader 都可以直接向用户汇报**——用户找的是哪个 Leader，就由哪个 Leader 汇报，不强制经上级中转。Leader 消化核对后再汇报，不直接转发 Worker 原文。
   - **简单任务不分发**：Leader 自己能做完的小修 / 一次性查询直接做；跨项目的修改仍交对应项目的 Leader / Worker，不越界。
   - **项目级旧表述**：各项目 `AGENTS.md` 里若还写 2026-11-12 版口径（「Agent 项目任何 worktree 都是 Leader / 子项目任何 worktree 都是 Worker」），以本节为准；接触该项目时顺手改。
+  - **术语口径**：其它文档 / skill 里未加限定的「Leader」指该项目的负责 Leader（Agent 项目 = agentLeader，子项目 = subLeader），不再特指「Agent 项目会话」；「Worker」一律按本节定义（当前 worktree 的会话）。
 
 - **自动唤醒**：`agent_call` 会先检查目标会话是否在线；**不在线时用 `dir` 参数自动启动对方会话**，等它注册后再发消息。因此调用时尽量带上 `dir`。`dir` 允许四类：Agent 项目根（main → agentLeader）/ Agent 项目的 git worktree（Worker）/ 已登记子项目根（main → subLeader）/ 子项目的 git worktree（Worker）——按 `~/.pi/agent/docs/agents-registry.md` 校验、按目标目录当前分支判角色，其它目录会被拒绝。
 - **两种模式**：只需要对方知晓用 `mode: "send"`（以本会话身份发送、立即返回）；需要对方答复才能继续干活用 `mode: "ask"`（阻塞等待回复，默认超时 2 分钟，可用 `timeout_ms` 调整）。只想提前把对方会话拉起来，用 `agent_wake`。
