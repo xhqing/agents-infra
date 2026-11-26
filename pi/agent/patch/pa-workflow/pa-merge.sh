@@ -13,8 +13,11 @@
 #   --push 时总是先把分支快照推到 origin（全局统一，非按项目开关）
 #   冲突进不了 main           → 合并失败就地报冲突文件并中止；main 一个字节都不动
 #   禁止直推 main             → pre-push 守卫只认本脚本设的 PA_MERGE_GATE=1
+#   内容密钥扫描              → 合并前对「本次将要进入 main 的提交」跑 gitleaks（2026-11-26 加；
+#                              分支提交可能用 --no-verify 绕过 pre-commit，这里兜底）
 #
 # 仓库侧约定（最小）：在仓库根放一个 checks.sh（或 .pi/checks.sh），声明「检查什么」。
+# 模板见同目录 checks-template.sh（必备文件 / 敏感文件 / 大文件 / README 链接 / 语法五类）。
 set -uo pipefail
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -171,6 +174,45 @@ attempt() {
       echo "── 门禁：${CHECKS} ──"
       PA_MERGE_BASE=origin/main PA_MERGE_BRANCH="$BRANCH" PA_SHARED="$SHARED" \
         bash "$CHECKS" || { echo "❌ 检查未通过，main 未改动" >&2; exit 1; }
+    fi
+    # 内容密钥扫描（2026-11-26 加）：分支提交可能用 --no-verify 绕过 pre-commit，
+    # 合并前再扫一遍「本次将要进入 main 的提交」。只扫增量范围（origin/main..HEAD），
+    # 不碰历史与数据目录；gitleaks 缺失时拒绝合并（fail-closed）。
+    if [ "${PA_ALLOW_NO_GITLEAKS:-0}" != "1" ]; then
+      if ! command -v gitleaks >/dev/null 2>&1; then
+        echo "❌ gitleaks 未安装，内容扫描无法执行（fail-closed）：brew install gitleaks" >&2
+        echo "   确需跳过（须用户当轮授权）：PA_ALLOW_NO_GITLEAKS=1 pa-merge.sh ..." >&2
+        exit 1
+      fi
+      echo "── 门禁：gitleaks 内容扫描（origin/main..HEAD）──"
+      gl_range="$(git rev-parse origin/main)..HEAD"
+      gl_report="$(mktemp -t pa-merge-gitleaks)"
+      if [ -f "$HOME/.gitleaks.toml" ]; then
+        gitleaks detect --source . --config "$HOME/.gitleaks.toml" \
+          --log-opts="$gl_range" --no-banner -l warn \
+          --report-format json --report-path "$gl_report" >&2
+      else
+        gitleaks detect --source . --log-opts="$gl_range" --no-banner -l warn \
+          --report-format json --report-path "$gl_report" >&2
+      fi
+      gl_rc=$?
+      if [ "$gl_rc" -ne 0 ]; then
+        python3 - "$gl_report" <<'PY' || true
+import json, sys
+try:
+    findings = json.load(open(sys.argv[1], encoding="utf-8"))
+except Exception:
+    raise SystemExit(0)
+for f in findings:
+    print(f"   {f.get('File')}:{f.get('StartLine')}  规则={f.get('RuleID')}", file=sys.stderr)
+PY
+        rm -f "$gl_report"
+        echo "❌ 检出疑似敏感信息（位置见上），main 未改动" >&2
+        echo "   处理：改掉 / 删除该内容后重新提交分支；确认是误报在该行尾加 gitleaks:allow" >&2
+        exit 1
+      fi
+      rm -f "$gl_report"
+      echo "✅ 内容扫描通过"
     fi
     if [ "$PUSH" = "1" ]; then
       # 把门禁记录写进合并提交（等价于 PR 描述里的「哪些检查过了」）
