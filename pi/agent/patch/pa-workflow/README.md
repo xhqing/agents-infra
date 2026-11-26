@@ -47,13 +47,23 @@ pa-release.sh patch|minor|major [--no-push]            # bump → 分支 → 门
 | `PA_MERGE_BRANCH` | 被合并的分支 |
 | `PA_SHARED` | 1 = 允许改共用文件 |
 
-最小示例：
+**从模板开始，别从零写**：`checks-template.sh`（同目录）含与公开仓库 `validate.py` 对齐的五类检查——必备文件（README / CHANGELOG）、敏感文件未被跟踪（`.env` / 私钥 / `*.kdbx` / 凭据）、被跟踪文件 ≤10 MB、README 相对链接有效、Python / Shell 语法。复制到仓库根为 `checks.sh`，项目自有检查写在文件末尾的「项目自有检查」段。
+
+最小示例（仅当项目有充分理由不要模板时）：
 
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
 python3 -m compileall -q src
 ```
+
+## 合并期内容扫描（gitleaks，2026-11-26 加）
+
+`pa-merge.sh` 在合并前对「本次将要进入 main 的提交」（`origin/main..合并提交`）跑一次 `gitleaks detect`：分支提交可以用 `git commit --no-verify` 绕过 pre-commit，合并这道是兜底。
+
+- 未装 gitleaks → **拒绝合并**（fail-closed），与 pre-commit 钩子同口径；
+- 检出 → 拒绝合并并打印位置，确认误报的行尾加 `gitleaks:allow`；
+- 受控例外：`PA_ALLOW_NO_GITLEAKS=1`（须用户当轮授权）。
 
 ## 与公开仓库流程的对应关系
 
@@ -64,15 +74,16 @@ python3 -m compileall -q src
 | 禁止在 main 上合并 / 变基 | branch protection（服务端拒收） | `pre-merge-commit` / `pre-rebase` → `pa-main-guard.sh merge|rebase`（钩子层；2026-11-24 补） |
 | 禁止在 main 上 reset / cherry-pick / revert / am / 改写引用 | branch protection（服务端拒收） | pi 端 `git-main-guard.ts`（tool 层；git 没有对应钩子） |
 | 禁止在主工作区 main 上写文件 | PR 流程 + 分支保护 | pi 端 `main-wip-guard.ts`（tool 层当场拦）+ `agent_settled` 自动搬运 |
-| required checks | required status check | `pa-merge.sh` 跑 `checks.sh` |
+| required checks | required status check | `pa-merge.sh` 跑 `checks.sh`（模板见 `checks-template.sh`，五类与公开 `validate.py` 对齐） |
 | strict（必须基于最新 base） | `required_status_checks.strict` | 每次 fetch 后在最新 `origin/main` 上合并，push 被拒自动重来 |
 | auto-merge | GitHub auto-merge | `pa-merge.sh --push` 串行合 + 单 pusher |
+| 内容密钥扫描（合并期） | 无专门规则（只有提交期 pre-commit） | `pa-merge.sh` 对 `origin/main..HEAD` 跑 gitleaks（比公开多一道） |
 | 保护已发布 tag | 无专门规则 | 守卫拦 tag 移动 / 删除（更严） |
 | 合并可审计 | PR 正文 | 合并提交正文写 `checks / branch / mode / gate` |
 
 ## 已知限制（诚实声明）
 
-- 本地钩子可被 `git push --no-verify` / `git commit --no-verify` / `git merge --no-verify` 绕过（私有仓库无服务端兜底），只能靠「单 pusher + 钩子 + 定期审计」近似。
+- 本地钩子可被 `git push --no-verify` / `git commit --no-verify` / `git merge --no-verify` 绕过（私有仓库无服务端兜底），只能靠「单 pusher + 钩子 + 定期审计」近似。**合并期 gitleaks 只扫 `origin/main..HEAD` 的增量提交**——历史里已存在的泄漏不会被它翻出来，需要时手动跑 `gitleaks detect --source .` 全量扫。
 - **git 没有 pre-reset / pre-cherry-pick 钩子**：`git reset` / `git cherry-pick` / `git revert` / `git am` / `git update-ref` / `git branch -f` 这几类只能由 pi 端 `git-main-guard.ts` 拦——即只覆盖「pi 会话里发出的命令」，人直接在终端敲的拦不住。
 - 同理「主工作区 main 上写文件」只拦 pi 的 `write` / `edit` 与常见 shell 写动作（重定向 / `sed -i` / `cp` / `mv` / `tee` / `chmod` …），**不含** `python` / `node` 脚本内部写盘（会把 `worktree-adopt.py` 这类正常流程误拦）。
 - `pre-rebase` 只判断「当前分支是不是 main」；`git rebase main feature`（在别的分支上把 feature 变基到 main）若当前正停在 main 上会被一并拦住，用带分支参数的写法或换到目标分支再操作。

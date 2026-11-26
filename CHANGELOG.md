@@ -9,6 +9,16 @@
 
 > 按全局 CLAUDE.md「同步动作只记权威源的 CHANGELOG」规矩：通用能力的同步只记本文件，**不记到各业务 agent 项目**（如 DayTradingAgent 等）的 CHANGELOG，避免污染那些项目自己的变更记录。
 
+## 2026-11-26
+
+- **镜像同步（2026-11-26）**：从全局 `~/.pi/agent` 单向发布。
+  **为什么改**：全局能力层有改动，本仓库是它的开源镜像，必须保持一致。
+  **改了什么**：3 个文件——
+  - `pi/agent/patch/pa-workflow/README.md`
+  - `pi/agent/patch/pa-workflow/pa-merge.sh`
+  - `pi/agent/patch/pa-workflow/checks-template.sh`
+  **回归风险**：无（只同步内容，不改本仓库自身逻辑）。
+
 ## 2026-11-25
 
 - **镜像同步（2026-11-25）**：从全局 `~/.pi/agent` 单向发布。
