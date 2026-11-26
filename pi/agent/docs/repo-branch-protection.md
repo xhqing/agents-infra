@@ -106,8 +106,8 @@
 
 - **public 仓库（全部已锁）**：18 个 Agent 项目 + 19 个子项目。参数统一为：PR 必过（0 approvals）、`enforce_admins=true`、禁 force / 禁删除、线性历史、`allow_squash_merge=true` + `allow_merge_commit/rebase_merge=false` + `allow_auto_merge=true` + `delete_branch_on_merge=true`；原有 required check 的仓库保留其 context 并补 `strict=true`（`agents-infra` / `assistant` = `validate`，`ghostty-launcher` = `Test & Check`，`codef` = `test`，`ghostty` = `build-macos`，`mp4-player` = `build`，`pi-harness` = `build-check-test`，`XPilot` = `test`）。
 - **cmux**：保护已开（PR 必过 + 线性 + 禁 force/删除 + admins 受限），但 required check 暂为空——fork 的 Actions 还没启用，加了会冻死 main；启用后再补 `checks`（见 cmux `DEVELOPMENT.md` §9.6）。
-- **private 仓库（GitHub 免费版无法开保护，API 直接 403）**：`dotfiles`、`ToolCallingRules`、`xhs-mentor-scam`。这些仓库靠本地 `git-main-guard.ts` 硬拦 + 流程约束。要真正上服务端保护需升级 GitHub Pro 或改 public（用户决定）。
-- **暂未锁的例外**：`xhs-mentor-scam` —— 该仓有一个 launchd 每 5 分钟执行的 `autosave.sh` **直接 push main**（备份用途，单写者、无 CI）。锁了会让自动备份静默失败，待决定：改造 autosave 推 `autosave` 分支，或保留豁免。
+- **private 仓库（GitHub 免费版无法开保护，API 实测 403）**：`xhs-mentor-scam`、`NewsScoreStudy`、`hyperliquid-research-trial`、`market-data-backup`。这些仓库走 `~/.pi/agent/patch/pa-workflow/` 的本地门禁（2026-11-23 起，取代早先只靠 `git-main-guard.ts` 的做法）：`pre-push` / `pre-commit` / `pre-merge-commit` / `pre-rebase` 四档钩子拦 main，`pa-merge.sh <分支> --push` 在最新 `origin/main` 上合并并跑仓库 `checks.sh`（模板 `checks-template.sh`，五类与公开仓 `validate.py` 对齐），合并前还对 `origin/main..HEAD` 跑 gitleaks（2026-11-26 加）。要真正上服务端保护需升级 GitHub Pro 或转 public（用户决定）。
+- **自动备份不再豁免**（2026-11-26 改）：`xhs-mentor-scam` 的 launchd `autosave.sh` 原先是「每 5 分钟直接 push main」的例外；门禁上线后它已静默失效（commit / push 全被拦、输出丢 `/dev/null`）。现改为用临时 index 生成快照、只推 `autosave` 分支（不碰 main / 工作区 / 暂存区），因此不再有任何绕过 main 锁的自动化。
 - **已退役/改名归档仓库不在范围**：`BidOptimizerAgent`、`CommunityManagerAgent`、`DeviceStewardAgent`、`NetOpsAgent`、`PatchClaudeAgent`。
 
 **注意**：`gridtrader` 默认分支是 `master`（其余为 `main`），保护挂在 `master` 上。
